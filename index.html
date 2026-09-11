@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Bloom — Task Manager</title>
+
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <!-- =========================
+       SIDEBAR
+  ========================== -->
+
+  <aside class="sidebar">
+
+    <div class="brand">
+
+      <div class="logo-mark">
+        <span>✦</span>
+      </div>
+
+      <div>
+        <h2>BLOOM</h2>
+        <small>Task Manager</small>
+      </div>
+
+    </div>
+
+
+    <div class="sidebar-section">
+
+      <p class="menu-label">MAIN</p>
+
+      <a href="#dashboard" class="nav-link active" data-view="dashboard">
+        <span>⌂</span>
+        Dashboard
+      </a>
+
+      <a href="#all" class="nav-link" data-view="all">
+        <span>☷</span>
+        My Tasks
+      </a>
+
+      <a href="#today" class="nav-link" data-view="today">
+        <span>◷</span>
+        Today
+      </a>
+
+      <a href="#upcoming" class="nav-link" data-view="upcoming">
+        <span>□</span>
+        Upcoming
+      </a>
+
+      <a href="#completed" class="nav-link" data-view="completed">
+        <span>✓</span>
+        Completed
+      </a>
+
+    </div>
+
+
+    <div class="sidebar-section">
+
+      <p class="menu-label">CATEGORIES</p>
+
+      <a href="#school" class="nav-link" data-view="school">
+        <span class="category-dot school"></span>
+        School Work
+      </a>
+
+      <a href="#work" class="nav-link" data-view="work">
+        <span class="category-dot work"></span>
+        Work
+      </a>
+
+      <a href="#personal" class="nav-link" data-view="personal">
+        <span class="category-dot personal"></span>
+        Personal
+      </a>
+
+      <a href="#errands" class="nav-link" data-view="errands">
+        <span class="category-dot errands"></span>
+        Errands
+      </a>
+
+    </div>
+
+
+    <div class="sidebar-bottom">
+
+      <a href="#settings" class="nav-link settings-link" data-view="settings">
+        <span>⚙</span>
+        Settings
+      </a>
+
+
+      <div class="profile-card" id="profileButton">
+
+        <div class="profile-avatar" id="sidebarProfileAvatar">
+          U
+        </div>
+
+        <div class="profile-info">
+
+          <strong id="sidebarUserName">
+            User
+          </strong>
+
+          <small>
+            Bloom user
+          </small>
+
+        </div>
+
+        <span class="profile-arrow">
+          ›
+        </span>
+
+      </div>
+
+    </div>
+
+  </aside>
+
+
+  <!-- =========================
+       MAIN CONTENT
+  ========================== -->
+
+  <main class="main-content">
+
+
+    <!-- =========================
+         TOP BAR
+    ========================== -->
+
+    <header class="topbar">
+
+      <div class="mobile-brand">
+
+        <div class="logo-mark small-logo">
+          <span>✦</span>
+        </div>
+
+        <strong>BLOOM</strong>
+
+      </div>
+
+
+      <div class="search-box">
+
+        <span>⌕</span>
+
+        <input
+          type="search"
+          id="searchInput"
+          placeholder="Search your tasks..."
+          autocomplete="off"
+        >
+
+      </div>
+
+
+      <div class="top-actions">
+
+
+        <!-- DARK / LIGHT MODE -->
+
+        <button
+          class="theme-toggle top-theme-toggle"
+          id="themeToggle"
+          type="button"
+          aria-label="Toggle dark mode"
+        >
+
+          <span
+            class="theme-icon"
+            id="themeIcon"
+          >
+            ☾
+          </span>
+
+          <span id="themeText">
+            Dark
+          </span>
+
+        </button>
+
+
+        <!-- NOTIFICATIONS -->
+
+        <button
+          class="icon-button"
+          id="notificationButton"
+          type="button"
+          aria-label="Notifications"
+        >
+          ♧
+        </button>
+
+
+        <!-- PROFILE -->
+
+        <button
+          class="top-profile"
+          id="profileButtonTop"
+          type="button"
+        >
+
+          <div
+            class="profile-avatar"
+            id="topProfileAvatar"
+          >
+            U
+          </div>
+
+          <span id="topUserName">
+            User
+          </span>
+
+          <span>
+            ⌄
+          </span>
+
+        </button>
+
+      </div>
+
+    </header>
+
+
+    <!-- =========================
+         APP VIEW
+    ========================== -->
+
+    <div
+      class="app-view"
+      id="appView"
+    ></div>
+
+  </main>
+
+
+  <!-- =========================
+       TASK MODAL
+  ========================== -->
+
+  <div
+    class="modal-overlay"
+    id="taskModal"
+  >
+
+    <div class="task-modal">
+
+
+      <div class="modal-header">
+
+        <div>
+
+          <p class="modal-label">
+            NEW TASK
+          </p>
+
+          <h2>
+            Create a task
+          </h2>
+
+        </div>
+
+
+        <button
+          class="close-modal"
+          type="button"
+          aria-label="Close"
+        >
+          ×
+        </button>
+
+      </div>
+
+
+      <form id="taskForm">
+
+
+        <!-- TASK TITLE -->
+
+        <label>
+          Task title
+
+          <input
+            type="text"
+            id="taskTitle"
+            placeholder="What needs to be done?"
+            required
+          >
+
+        </label>
+
+
+        <!-- DESCRIPTION -->
+
+        <label>
+          Description
+
+          <textarea
+            id="taskDescription"
+            placeholder="Add some details..."
+            rows="3"
+          ></textarea>
+
+        </label>
+
+
+        <!-- DATE + REMINDER -->
+
+        <div class="form-row">
+
+
+          <label>
+            Due date
+
+            <input
+              type="date"
+              id="taskDate"
+            >
+
+          </label>
+
+
+          <label>
+            Reminder (optional)
+
+            <input
+              type="text"
+              id="taskReminder"
+              placeholder="Optional: HH:MM:SS"
+              inputmode="numeric"
+              pattern="([01]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?"
+              maxlength="8"
+            >
+
+          </label>
+
+        </div>
+
+
+        <!-- PRIORITY + CATEGORY -->
+
+        <div class="form-row">
+
+
+          <label>
+            Priority
+
+            <select id="taskPriority">
+
+              <option value="low">
+                Low
+              </option>
+
+              <option
+                value="medium"
+                selected
+              >
+                Medium
+              </option>
+
+              <option value="high">
+                High
+              </option>
+
+            </select>
+
+          </label>
+
+
+          <label>
+            Category
+
+            <select id="taskCategory">
+
+              <option value="school">
+                School
+              </option>
+
+              <option value="work">
+                Work
+              </option>
+
+              <option value="personal">
+                Personal
+              </option>
+
+              <option value="errands">
+                Errands
+              </option>
+
+            </select>
+
+          </label>
+
+        </div>
+
+
+        <!-- MODAL ACTIONS -->
+
+        <div class="modal-actions">
+
+          <button
+            class="cancel-btn"
+            type="button"
+          >
+            Cancel
+          </button>
+
+          <button
+            class="primary-btn"
+            type="submit"
+          >
+            Create Task
+          </button>
+
+        </div>
+
+      </form>
+
+    </div>
+
+  </div>
+
+
+  <script src="script.js"></script>
+
+</body>
+</html>
