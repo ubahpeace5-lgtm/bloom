@@ -1,6 +1,7 @@
 const STORAGE_KEY = "bloom_tasks";
 const THEME_KEY = "bloom_theme";
 const USERNAME_KEY = "bloom_user_name";
+const AUTH_KEY = "bloom_user_authenticated";
 const NOTIFIED_KEY = "bloom_notified_reminders";
 
 
@@ -180,6 +181,62 @@ function saveUserName(name) {
   );
 
   return true;
+
+}
+
+
+function openSignIn() {
+
+  const modal =
+    document.getElementById(
+      "signInModal"
+    );
+
+  if (!modal) {
+    return;
+  }
+
+  modal.classList.add(
+    "show"
+  );
+
+  modal.setAttribute(
+    "aria-hidden",
+    "false"
+  );
+
+  setTimeout(() => {
+
+    document
+      .getElementById(
+        "signInUsername"
+      )
+      ?.focus();
+
+  }, 50);
+
+}
+
+
+function closeSignIn() {
+
+  const modal =
+    document.getElementById(
+      "signInModal"
+    );
+
+  if (!modal) {
+    return;
+  }
+
+  modal.classList.remove(
+    "show"
+  );
+
+  modal.setAttribute(
+    "aria-hidden",
+    "true"
+  );
 
 }
 
@@ -2302,6 +2359,72 @@ function checkTaskReminders() {
 
 
 /* =========================
+   SIGN-IN
+========================= */
+
+document.addEventListener(
+  "submit",
+  event => {
+
+    if (
+      event.target.id !==
+        "signInForm"
+    ) {
+
+      return;
+
+    }
+
+    event.preventDefault();
+
+    const input =
+      document.getElementById(
+        "signInUsername"
+      );
+
+    const password =
+      document.getElementById(
+        "signInPassword"
+      );
+
+    if (!input || !password) {
+
+      return;
+
+    }
+
+    if (!input.value.trim()) {
+
+      input.focus();
+
+      return;
+
+    }
+
+    if (password.value.length < 6) {
+
+      password.focus();
+
+      return;
+
+    }
+
+    saveUserName(input.value);
+
+    localStorage.setItem(
+      AUTH_KEY,
+      "true"
+    );
+
+    closeSignIn();
+
+    updateUserInterface();
+
+  }
+);
+
+
+/* =========================
    CLICK EVENTS
 ========================= */
 
@@ -3099,3 +3222,13 @@ navigate(
 
 
 updateUserInterface();
+
+
+if (
+  !localStorage.getItem(USERNAME_KEY) ||
+  localStorage.getItem(AUTH_KEY) !== "true"
+) {
+
+  openSignIn();
+
+}

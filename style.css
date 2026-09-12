@@ -333,9 +333,6 @@ a {
 
   padding: 12px;
 
-  border-top:
-    1px solid var(--border);
-
   cursor: pointer;
 
 }
@@ -1409,6 +1406,140 @@ a {
 .modal-overlay.show {
 
   display: flex;
+
+}
+
+
+.sign-in-overlay {
+
+  z-index: 200;
+
+  background:
+    rgba(48, 37, 43, 0.72);
+
+}
+
+
+.sign-in-modal {
+
+  width:
+    min(430px, 100%);
+
+  background:
+    var(--surface);
+
+  border-radius: 18px;
+
+  padding: 38px;
+
+  box-shadow:
+    0 25px 70px
+    rgba(0, 0, 0, 0.24);
+
+  text-align: center;
+
+}
+
+
+.sign-in-mark {
+
+  width: 52px;
+  height: 52px;
+
+  display: grid;
+  place-items: center;
+
+  margin: 0 auto 22px;
+
+  border-radius: 16px;
+
+  background:
+    var(--primary);
+
+  color: white;
+
+  font-size: 25px;
+
+}
+
+
+.sign-in-modal h1 {
+
+  margin-bottom: 9px;
+
+  font-size: 28px;
+
+}
+
+
+.sign-in-copy {
+
+  color: var(--muted);
+
+  font-size: 14px;
+
+  line-height: 1.5;
+
+  margin-bottom: 26px;
+
+}
+
+
+#signInForm {
+
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 9px;
+
+  text-align: left;
+
+}
+
+
+#signInForm label {
+
+  font-size: 12px;
+
+  font-weight: 600;
+
+}
+
+
+#signInUsername,
+#signInPassword {
+
+  width: 100%;
+
+  border: 1px solid var(--border);
+
+  background: var(--background);
+
+  color: var(--text);
+
+  border-radius: 9px;
+
+  padding: 12px;
+
+  outline: none;
+
+}
+
+
+#signInUsername:focus,
+#signInPassword:focus {
+
+  border-color: var(--primary);
+
+}
+
+
+.sign-in-btn {
+
+  width: 100%;
+
+  margin-top: 9px;
 
 }
 

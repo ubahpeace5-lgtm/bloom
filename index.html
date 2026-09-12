@@ -246,6 +246,77 @@
 
 
   <!-- =========================
+       SIGN-IN
+  ========================== -->
+
+  <div
+    class="modal-overlay sign-in-overlay"
+    id="signInModal"
+    aria-hidden="true"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="signInTitle"
+  >
+
+    <div class="sign-in-modal">
+
+      <div class="sign-in-mark">✦</div>
+
+      <p class="modal-label">
+        WELCOME TO BLOOM
+      </p>
+
+      <h1 id="signInTitle">
+        Make today bloom.
+      </h1>
+
+      <p class="sign-in-copy">
+        Sign in with your username to open your task space.
+      </p>
+
+      <form id="signInForm">
+
+        <label for="signInUsername">
+          Username
+        </label>
+
+        <input
+          type="text"
+          id="signInUsername"
+          placeholder="e.g. alex"
+          autocomplete="username"
+          maxlength="40"
+          required
+        >
+
+        <label for="signInPassword">
+          Password
+        </label>
+
+        <input
+          type="password"
+          id="signInPassword"
+          placeholder="Enter your password"
+          autocomplete="current-password"
+          minlength="6"
+          required
+        >
+
+        <button
+          class="primary-btn sign-in-btn"
+          type="submit"
+        >
+          Open Bloom
+        </button>
+
+      </form>
+
+    </div>
+
+  </div>
+
+
+  <!-- =========================
        TASK MODAL
   ========================== -->
 
