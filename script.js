@@ -1,6 +1,3 @@
-/* =========================================================
-   BLOOM — TASK MANAGER
-   ========================================================= */
 
 const CURRENT_USER_KEY = "bloom_current_user";
 const AUTH_KEY = "bloom_authenticated";
@@ -312,10 +309,6 @@ function updateProfileUI() {
 }
 
 
-/* =========================================================
-   THEME
-   ========================================================= */
-
 function applySavedTheme() {
 
   const savedTheme =
@@ -397,10 +390,6 @@ function toggleTheme() {
 
 }
 
-
-/* =========================================================
-   NOTIFICATIONS
-   ========================================================= */
 
 function updateNotificationUI() {
 
@@ -563,10 +552,6 @@ async function requestNotificationPermission() {
 
 }
 
-
-/* =========================================================
-   ALARM AUDIO
-   ========================================================= */
 
 function initializeAlarmAudio() {
 
@@ -1969,6 +1954,7 @@ function settingsMarkup() {
       </div>
 
     </section>
+
 
   `;
 
