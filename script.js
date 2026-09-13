@@ -2143,10 +2143,32 @@ function changeUsername(newUsername) {
    ========================================================= */
 
 document.addEventListener(
+  "input",
+  event => {
+
+    if (event.target.id !== "taskReminder") {
+      return;
+    }
+
+    const digits = event.target.value
+      .replace(/\D/g, "")
+      .slice(0, 6);
+
+    event.target.value = digits.replace(
+      /^(\d{2})(\d{1,2})?(\d{1,2})?$/,
+      (_, hours, minutes = "", seconds = "") =>
+        [hours, minutes, seconds]
+          .filter(Boolean)
+          .join(":")
+    );
+
+  }
+);
+
+
+document.addEventListener(
   "click",
   async event => {
-
-
     /* Navigation */
 
     const navLink =
