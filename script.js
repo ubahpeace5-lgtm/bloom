@@ -1,493 +1,1185 @@
-const STORAGE_KEY = "bloom_tasks";
+/* =========================================================
+   BLOOM — TASK MANAGER
+   ========================================================= */
+
+const CURRENT_USER_KEY = "bloom_current_user";
+const AUTH_KEY = "bloom_authenticated";
 const THEME_KEY = "bloom_theme";
-const USERNAME_KEY = "bloom_user_name";
-const AUTH_KEY = "bloom_user_authenticated";
-const NOTIFIED_KEY = "bloom_notified_reminders";
-
-
-/* =========================
-   APP STATE
-========================= */
-
-let tasks = [];
-
-try {
-
-  tasks = JSON.parse(
-    localStorage.getItem(STORAGE_KEY) || "[]"
-  );
-
-  if (!Array.isArray(tasks)) {
-    tasks = [];
-  }
-
-} catch (error) {
-
-  console.error(
-    "Could not load Bloom tasks:",
-    error
-  );
-
-  tasks = [];
-
-}
-
+const USERS_INDEX_KEY = "bloom_users";
+const OLD_TASKS_KEY = "bloom_tasks";
+const OLD_REMINDERS_KEY = "bloom_notified_reminders";
 
 let currentView = "dashboard";
 let searchTerm = "";
 
+let tasks = [];
+
 let audioContext = null;
 let alarmInterval = null;
+let reminderTimeouts = new Map();
 
-let notifiedReminders = [];
+let notifiedReminders = new Set();
 
-try {
-
-  notifiedReminders = JSON.parse(
-    localStorage.getItem(NOTIFIED_KEY) || "[]"
-  );
-
-  if (!Array.isArray(notifiedReminders)) {
-    notifiedReminders = [];
-  }
-
-} catch (error) {
-
-  notifiedReminders = [];
-
+function normalizeUsername(username) {
+  return String(username || "")
+    .trim()
+    .toLowerCase();
 }
 
 
-/* =========================
-   VIEW CONFIG
-========================= */
+function getUserName() {
+  return localStorage.getItem(CURRENT_USER_KEY) || "";
+}
 
-const VIEW_CONFIG = {
 
-  dashboard: {
-    title: "Dashboard",
-    description:
-      "Here's what's on your plate today."
-  },
+function getUserKey() {
+  return normalizeUsername(getUserName());
+}
 
-  all: {
-    title: "My Tasks",
-    description:
-      "All your tasks in one place."
-  },
 
-  today: {
-    title: "Today",
-    description:
-      "Tasks that are due today."
-  },
+function isAuthenticated() {
+  return localStorage.getItem(AUTH_KEY) === "true";
+}
 
-  upcoming: {
-    title: "Upcoming",
-    description:
-      "Stay ahead of what's coming next."
-  },
 
-  completed: {
-    title: "Completed",
-    description:
-      "A record of everything you've finished."
-  },
+function setCurrentUser(username) {
 
-  school: {
-    title: "School Work",
-    description:
-      "Keep your academic tasks organized."
-  },
+  const cleanName = String(username || "").trim();
 
-  work: {
-    title: "Work",
-    description:
-      "Your work-related tasks."
-  },
+  if (!cleanName) return;
 
-  personal: {
-    title: "Personal",
-    description:
-      "Personal tasks and plans."
-  },
+  localStorage.setItem(CURRENT_USER_KEY, cleanName);
+  localStorage.setItem(AUTH_KEY, "true");
 
-  errands: {
-    title: "Errands",
-    description:
-      "Things you need to get done."
-  },
+  const users = getUsersIndex();
 
-  settings: {
-    title: "Settings",
-    description:
-      "Customize your Bloom experience."
+  const key = normalizeUsername(cleanName);
+
+  if (!users.includes(key)) {
+    users.push(key);
+    localStorage.setItem(
+      USERS_INDEX_KEY,
+      JSON.stringify(users)
+    );
   }
+}
 
-};
+
+function getUsersIndex() {
+
+  try {
+
+    const users = JSON.parse(
+      localStorage.getItem(USERS_INDEX_KEY) || "[]"
+    );
+
+    return Array.isArray(users) ? users : [];
+
+  } catch {
+
+    return [];
+
+  }
+}
 
 
-/* =========================
-   STORAGE
-========================= */
+
+function getTasksStorageKey(username = getUserName()) {
+
+  const key = normalizeUsername(username);
+
+  return key
+    ? `bloom_tasks_${key}`
+    : OLD_TASKS_KEY;
+}
+
+
+function getRemindersStorageKey(username = getUserName()) {
+
+  const key = normalizeUsername(username);
+
+  return key
+    ? `bloom_notified_reminders_${key}`
+    : OLD_REMINDERS_KEY;
+}
+
+
+function loadTasks() {
+
+  try {
+
+    const stored = localStorage.getItem(
+      getTasksStorageKey()
+    );
+
+    tasks = stored
+      ? JSON.parse(stored)
+      : [];
+
+    if (!Array.isArray(tasks)) {
+      tasks = [];
+    }
+
+  } catch {
+
+    tasks = [];
+
+  }
+}
+
 
 function saveTasks() {
 
   localStorage.setItem(
-    STORAGE_KEY,
+    getTasksStorageKey(),
     JSON.stringify(tasks)
   );
+}
 
+
+function loadNotifiedReminders() {
+
+  try {
+
+    const stored = localStorage.getItem(
+      getRemindersStorageKey()
+    );
+
+    const parsed = stored
+      ? JSON.parse(stored)
+      : [];
+
+    notifiedReminders = new Set(
+      Array.isArray(parsed) ? parsed : []
+    );
+
+  } catch {
+
+    notifiedReminders = new Set();
+
+  }
 }
 
 
 function saveNotifiedReminders() {
 
   localStorage.setItem(
-    NOTIFIED_KEY,
-    JSON.stringify(notifiedReminders)
+    getRemindersStorageKey(),
+    JSON.stringify(
+      Array.from(notifiedReminders)
+    )
   );
-
 }
 
 
-/* =========================
-   USERNAME
-========================= */
 
-function getUserName() {
+function localDateString(date = new Date()) {
 
-  return (
-    localStorage.getItem(
-      USERNAME_KEY
-    ) || "User"
-  );
+  const year = date.getFullYear();
 
-}
+  const month = String(
+    date.getMonth() + 1
+  ).padStart(2, "0");
 
+  const day = String(
+    date.getDate()
+  ).padStart(2, "0");
 
-function saveUserName(name) {
-
-  const cleanName =
-    name.trim();
-
-  if (!cleanName) {
-    return false;
-  }
-
-  localStorage.setItem(
-    USERNAME_KEY,
-    cleanName
-  );
-
-  return true;
-
-}
-
-
-function openSignIn() {
-
-  const modal =
-    document.getElementById(
-      "signInModal"
-    );
-
-  if (!modal) {
-    return;
-  }
-
-  modal.classList.add(
-    "show"
-  );
-
-  modal.setAttribute(
-    "aria-hidden",
-    "false"
-  );
-
-  setTimeout(() => {
-
-    document
-      .getElementById(
-        "signInUsername"
-      )
-      ?.focus();
-
-  }, 50);
-
-}
-
-
-function closeSignIn() {
-
-  const modal =
-    document.getElementById(
-      "signInModal"
-    );
-
-  if (!modal) {
-    return;
-  }
-
-  modal.classList.remove(
-    "show"
-  );
-
-  modal.setAttribute(
-    "aria-hidden",
-    "true"
-  );
-
-}
-
-
-/* =========================
-   DATE HELPERS
-========================= */
-
-function localDateString(
-  date = new Date()
-) {
-
-  const y =
-    date.getFullYear();
-
-  const m =
-    String(
-      date.getMonth() + 1
-    ).padStart(2, "0");
-
-  const d =
-    String(
-      date.getDate()
-    ).padStart(2, "0");
-
-  return `${y}-${m}-${d}`;
-
+  return `${year}-${month}-${day}`;
 }
 
 
 function normalizeReminderTime(value) {
 
-  if (!value || typeof value !== "string") {
-    return "";
+  if (!value) return "";
+
+  let raw = String(value).trim();
+
+  if (/^\d{6}$/.test(raw)) {
+    raw = `${raw.slice(0, 2)}:${raw.slice(2, 4)}:${raw.slice(4, 6)}`;
   }
 
-  const raw = value.trim();
-
-  if (!raw) {
-    return "";
-  }
-
-  const sanitized = raw.replace(/[^0-9:]/g, "");
-
-  if (!sanitized) {
-    return "";
-  }
-
-  const parts = sanitized.split(":");
-
-  if (parts.length === 1) {
-    return "";
-  }
-
-  let hours = String(
-    Number.parseInt(parts[0], 10) || 0
+  const match = raw.match(
+    /^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/
   );
 
-  let minutes = String(
-    Number.parseInt(parts[1], 10) || 0
-  );
+  if (!match) return "";
 
-  let seconds = "00";
-
-  if (parts.length >= 3) {
-    seconds = String(
-      Number.parseInt(parts[2], 10) || 0
-    );
-  }
-
-  hours = String(
-    Math.min(Number.parseInt(hours, 10), 23)
-  ).padStart(2, "0");
-
-  minutes = String(
-    Math.min(Number.parseInt(minutes, 10), 59)
-  ).padStart(2, "0");
-
-  seconds = String(
-    Math.min(Number.parseInt(seconds, 10), 59)
-  ).padStart(2, "0");
+  const hours = match[1];
+  const minutes = match[2];
+  const seconds = match[3] || "00";
 
   return `${hours}:${minutes}:${seconds}`;
-
 }
+
 
 
 function formatReminderTime(value) {
 
-  const cleaned = normalizeReminderTime(value);
-
-  if (!cleaned) {
-    return "";
-  }
-
-  return cleaned.endsWith(":00")
-    ? cleaned.slice(0, -3)
-    : cleaned;
+  return normalizeReminderTime(value);
 
 }
 
 
-function formatDate(value) {
+function getReminderDateTime(task) {
 
-  if (!value) {
-    return "No due date";
+  if (!task.reminder) {
+    return null;
   }
 
   const date =
-    new Date(
-      `${value}T00:00:00`
-    );
+    task.reminderDate ||
+    task.dueDate ||
+    localDateString();
 
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
-
-    return value;
-
-  }
-
-  return date.toLocaleDateString(
-    undefined,
-    {
-      month: "short",
-      day: "numeric",
-      year: "numeric"
-    }
+  const normalized = normalizeReminderTime(
+    task.reminder
   );
 
+  if (!normalized) {
+    return null;
+  }
+
+  const dateTime = new Date(
+    `${date}T${normalized}`
+  );
+
+  if (Number.isNaN(dateTime.getTime())) {
+    return null;
+  }
+
+  return dateTime;
 }
 
 
-/* =========================
-   HTML SAFETY
-========================= */
 
 function escapeHtml(value) {
 
-  const div =
-    document.createElement("div");
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 
-  div.textContent =
-    value ?? "";
+}
 
-  return div.innerHTML;
+function getInitial(name) {
+
+  const clean = String(name || "").trim();
+
+  return clean
+    ? clean.charAt(0).toUpperCase()
+    : "U";
 
 }
 
 
-/* =========================
-   MODAL
-========================= */
+function updateProfileUI() {
 
-function openModal() {
+  const name = getUserName();
 
-  const modal =
-    document.getElementById(
-      "taskModal"
+  const initial = getInitial(name);
+
+  const sidebarName =
+    document.getElementById("sidebarUserName");
+
+  const topName =
+    document.getElementById("topUserName");
+
+  const sidebarAvatar =
+    document.getElementById("sidebarProfileAvatar");
+
+  const topAvatar =
+    document.getElementById("topProfileAvatar");
+
+  if (sidebarName) {
+    sidebarName.textContent = name || "User";
+  }
+
+  if (topName) {
+    topName.textContent = name || "User";
+  }
+
+  if (sidebarAvatar) {
+    sidebarAvatar.textContent = initial;
+  }
+
+  if (topAvatar) {
+    topAvatar.textContent = initial;
+  }
+
+}
+
+
+/* =========================================================
+   THEME
+   ========================================================= */
+
+function applySavedTheme() {
+
+  const savedTheme =
+    localStorage.getItem(THEME_KEY);
+
+  if (savedTheme === "dark") {
+
+    document.body.classList.add("dark-mode");
+
+  } else {
+
+    document.body.classList.remove("dark-mode");
+
+  }
+
+  updateThemeButton();
+
+}
+
+
+function updateThemeButton() {
+
+  const icon =
+    document.getElementById("themeIcon");
+
+  const text =
+    document.getElementById("themeText");
+
+  const dark =
+    document.body.classList.contains("dark-mode");
+
+
+  if (dark) {
+
+    /*
+      Yellow moon in Dark Mode.
+    */
+
+    if (icon) {
+      icon.textContent = "🌙";
+    }
+
+    if (text) {
+      text.textContent = "Dark Mode";
+    }
+
+  } else {
+
+    /*
+      Pretty sun symbol for Light Mode.
+    */
+
+    if (icon) {
+      icon.textContent = "☼";
+    }
+
+    if (text) {
+      text.textContent = "Light Mode";
+    }
+
+  }
+
+}
+
+
+function toggleTheme() {
+
+  const dark =
+    document.body.classList.toggle("dark-mode");
+
+  localStorage.setItem(
+    THEME_KEY,
+    dark ? "dark" : "light"
+  );
+
+  updateThemeButton();
+
+  renderApp();
+
+}
+
+
+/* =========================================================
+   NOTIFICATIONS
+   ========================================================= */
+
+function updateNotificationUI() {
+
+  const button =
+    document.getElementById("notificationButton");
+
+  if (!button) return;
+
+
+  if (!("Notification" in window)) {
+
+    button.title =
+      "Browser notifications are not supported";
+
+    return;
+
+  }
+
+
+  if (Notification.permission === "granted") {
+
+    button.title =
+      "Notifications are enabled";
+
+  } else if (
+    Notification.permission === "denied"
+  ) {
+
+    button.title =
+      "Notifications are blocked in browser settings";
+
+  } else {
+
+    button.title =
+      "Enable notifications";
+
+  }
+
+}
+
+
+function isNotificationEnvironmentSupported() {
+
+  if (!("Notification" in window)) {
+    return false;
+  }
+
+
+  /*
+     Browser notifications need HTTPS or localhost.
+     Opening index.html directly as file:// can prevent
+     the permission request from working.
+  */
+
+  const isLocalhost =
+    location.hostname === "localhost" ||
+    location.hostname === "127.0.0.1";
+
+  const isHttps =
+    location.protocol === "https:";
+
+  return isHttps || isLocalhost;
+
+}
+
+
+async function requestNotificationPermission() {
+
+  if (!("Notification" in window)) {
+
+    alert(
+      "Browser notifications are not supported on this device."
     );
 
-  if (!modal) {
+    return false;
+
+  }
+
+
+  if (!isNotificationEnvironmentSupported()) {
+
+    alert(
+      "Bloom browser notifications need a secure connection.\n\n" +
+      "If you are using VS Code, open Bloom with Live Server " +
+      "instead of opening the HTML file directly."
+    );
+
+    return false;
+
+  }
+
+
+  if (Notification.permission === "granted") {
+
+    updateNotificationUI();
+
+    alert(
+      "Bloom notifications are already enabled."
+    );
+
+    return true;
+
+  }
+
+
+  if (Notification.permission === "denied") {
+
+    updateNotificationUI();
+
+    alert(
+      "Notifications are blocked for Bloom in your browser. " +
+      "Open your browser's site settings and allow notifications."
+    );
+
+    return false;
+
+  }
+
+
+  try {
+
+    const permission =
+      await Notification.requestPermission();
+
+    updateNotificationUI();
+
+
+    if (permission === "granted") {
+
+      alert(
+        "Bloom notifications are now enabled."
+      );
+
+      return true;
+
+    }
+
+
+    if (permission === "denied") {
+
+      alert(
+        "Bloom notifications were blocked. " +
+        "You can allow them later from your browser site settings."
+      );
+
+    }
+
+    return false;
+
+  } catch (error) {
+
+    console.error(
+      "Notification permission error:",
+      error
+    );
+
+    return false;
+
+  }
+
+}
+
+
+/* =========================================================
+   ALARM AUDIO
+   ========================================================= */
+
+function initializeAlarmAudio() {
+
+  if (audioContext) {
     return;
   }
 
-  modal.classList.add(
-    "show"
-  );
+  try {
 
-  requestNotificationPermission();
+    const AudioContext =
+      window.AudioContext ||
+      window.webkitAudioContext;
+
+    if (!AudioContext) {
+      return;
+    }
+
+    audioContext = new AudioContext();
+
+  } catch (error) {
+
+    console.error(
+      "Audio initialization failed:",
+      error
+    );
+
+    audioContext = null;
+
+  }
+
+}
+
+
+async function resumeAlarmAudio() {
 
   initializeAlarmAudio();
 
+  if (!audioContext) {
+    return;
+  }
 
-  setTimeout(() => {
+  try {
 
-    document
-      .getElementById(
-        "taskTitle"
-      )
-      ?.focus();
+    if (
+      audioContext.state === "suspended"
+    ) {
 
-  }, 50);
+      await audioContext.resume();
 
-}
+    }
 
+  } catch (error) {
 
-function closeModal() {
-
-  document
-    .getElementById(
-      "taskModal"
-    )
-    ?.classList.remove(
-      "show"
+    console.error(
+      "Could not resume alarm audio:",
+      error
     );
 
+  }
+
 }
 
 
-/* =========================
-   NAVIGATION
-========================= */
+/*
+   Two-tone Bloom reminder sound.
+*/
 
-function getViewFromHash() {
+function playAlarmBeep() {
 
-  const hash =
-    window.location.hash.replace(
-      /^#/,
-      ""
+  if (!audioContext) {
+    return;
+  }
+
+  try {
+
+    const now =
+      audioContext.currentTime;
+
+
+    const notes = [
+      {
+        frequency: 880,
+        start: 0
+      },
+      {
+        frequency: 1174.66,
+        start: 0.18
+      }
+    ];
+
+
+    notes.forEach(note => {
+
+      const oscillator =
+        audioContext.createOscillator();
+
+      const gain =
+        audioContext.createGain();
+
+
+      oscillator.type = "sine";
+
+      oscillator.frequency.setValueAtTime(
+        note.frequency,
+        now + note.start
+      );
+
+
+      gain.gain.setValueAtTime(
+        0.0001,
+        now + note.start
+      );
+
+      gain.gain.exponentialRampToValueAtTime(
+        0.32,
+        now + note.start + 0.03
+      );
+
+      gain.gain.exponentialRampToValueAtTime(
+        0.0001,
+        now + note.start + 0.45
+      );
+
+
+      oscillator.connect(gain);
+
+      gain.connect(
+        audioContext.destination
+      );
+
+
+      oscillator.start(
+        now + note.start
+      );
+
+      oscillator.stop(
+        now + note.start + 0.5
+      );
+
+    });
+
+  } catch (error) {
+
+    console.error(
+      "Alarm sound error:",
+      error
     );
 
-  return Object.hasOwn(
-    VIEW_CONFIG,
-    hash
-  )
-    ? hash
-    : "dashboard";
+  }
 
 }
 
 
-function navigate(
-  view,
-  push = true
-) {
+async function startAlarm() {
+
+  stopAlarm();
+
+  await resumeAlarmAudio();
+
+  if (audioContext?.state === "running") {
+    playAlarmBeep();
+  }
+
+
+  alarmInterval = setInterval(() => {
+
+    resumeAlarmAudio()
+      .then(() => {
+        if (audioContext?.state === "running") {
+          playAlarmBeep();
+        }
+      })
+      .catch(() => {});
+
+  }, 1300);
+
+}
+
+
+function stopAlarm() {
+
+  if (alarmInterval) {
+
+    clearInterval(alarmInterval);
+
+    alarmInterval = null;
+
+  }
+
+}
+
+
+/* =========================================================
+   ALARM BOX
+   ========================================================= */
+
+function showAlarmBox(task) {
+
+  const box =
+    document.getElementById("bloomAlarmBox");
+
+  const text =
+    document.getElementById("bloomAlarmText");
+
+
+  if (!box || !text) {
+    return;
+  }
+
+
+  text.textContent =
+    `Due task: "${task.title}"`;
+
+
+  box.classList.add("show");
+
+
+  startAlarm();
+
+}
+
+
+function hideAlarmBox() {
+
+  const box =
+    document.getElementById("bloomAlarmBox");
+
+  if (box) {
+    box.classList.remove("show");
+  }
+
+  stopAlarm();
+
+}
+
+
+function triggerTaskReminder(task) {
+
+  const reminderDate =
+    getReminderDateTime(task);
+
+  if (!reminderDate) {
+    return;
+  }
+
+
+  const reminderKey =
+    `${task.id}_${localDateString(reminderDate)}_${normalizeReminderTime(task.reminder)}`;
+
+
+  if (notifiedReminders.has(reminderKey)) {
+    return;
+  }
+
+
+  notifiedReminders.add(
+    reminderKey
+  );
+
+  saveNotifiedReminders();
+
+
+  /*
+     Always show and ring the Bloom alarm.
+     Browser notification is an additional feature.
+  */
+
+  showAlarmBox(task);
+
 
   if (
-    !Object.hasOwn(
-      VIEW_CONFIG,
-      view
-    )
+    "Notification" in window &&
+    Notification.permission === "granted"
   ) {
 
-    view = "dashboard";
+    try {
+
+      new Notification(
+        "Bloom Reminder",
+        {
+          body: `"${task.title}" is due now.`,
+          tag: reminderKey
+        }
+      );
+
+    } catch (error) {
+
+      console.error(
+        "Browser notification failed:",
+        error
+      );
+
+    }
+
+  }
+
+}
+
+
+function checkTaskReminders() {
+
+  if (!getUserName()) {
+    return;
+  }
+
+
+  const now = new Date();
+
+
+  tasks.forEach(task => {
+
+    if (
+      task.completed ||
+      !task.reminder
+    ) {
+      return;
+    }
+
+
+    const reminderDate =
+      getReminderDateTime(task);
+
+    if (!reminderDate) {
+      return;
+    }
+
+
+    const difference =
+      now.getTime() -
+      reminderDate.getTime();
+
+
+    /*
+       The 2-minute window lets Bloom catch a reminder
+       if the browser briefly delays JavaScript.
+    */
+
+    if (
+      difference >= 0 &&
+      difference <= 120000
+    ) {
+
+      triggerTaskReminder(task);
+
+    }
+
+  });
+
+}
+
+
+function clearReminderTimer(taskId) {
+
+  const timeoutId = reminderTimeouts.get(taskId);
+
+  if (timeoutId) {
+    clearTimeout(timeoutId);
+    reminderTimeouts.delete(taskId);
+  }
+
+}
+
+
+function scheduleTaskReminder(task) {
+
+  clearReminderTimer(task.id);
+
+  if (task.completed || !task.reminder) {
+    return;
+  }
+
+  const reminderDate = getReminderDateTime(task);
+
+  if (!reminderDate) {
+    return;
+  }
+
+  const delay = reminderDate.getTime() - Date.now();
+
+  if (delay <= 0) {
+    checkTaskReminders();
+    return;
+  }
+
+  const timeoutId = setTimeout(() => {
+    reminderTimeouts.delete(task.id);
+
+    const currentTask = tasks.find(item => item.id === task.id);
+
+    if (currentTask && !currentTask.completed) {
+      triggerTaskReminder(currentTask);
+    }
+  }, delay);
+
+  reminderTimeouts.set(task.id, timeoutId);
+
+}
+
+
+function scheduleAllTaskReminders() {
+
+  reminderTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
+  reminderTimeouts.clear();
+
+  tasks.forEach(scheduleTaskReminder);
+
+}
+
+
+async function createTask(form) {
+
+  const titleInput =
+    document.getElementById("taskTitle");
+
+  const descriptionInput =
+    document.getElementById("taskDescription");
+
+  const dateInput =
+    document.getElementById("taskDate");
+
+  const reminderInput =
+    document.getElementById("taskReminder");
+
+  const priorityInput =
+    document.getElementById("taskPriority");
+
+  const categoryInput =
+    document.getElementById("taskCategory");
+
+
+  const title =
+    titleInput?.value.trim();
+
+
+  if (!title) {
+
+    titleInput?.focus();
+
+    return;
 
   }
 
 
-  currentView = view;
+  const dueDate =
+    dateInput?.value || "";
 
 
-  if (push) {
-
-    history.pushState(
-      {},
-      "",
-      `#${view}`
+  const reminder =
+    normalizeReminderTime(
+      reminderInput?.value || ""
     );
+
+
+  /*
+     Reminder is OPTIONAL.
+     If empty, Bloom creates the task normally
+     without an alarm.
+  */
+
+
+  const task = {
+
+    id:
+      `${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2)}`,
+
+    title,
+
+    description:
+      descriptionInput?.value.trim() || "",
+
+    dueDate,
+
+    reminder,
+
+    reminderDate:
+      reminder
+        ? (dueDate || localDateString())
+        : "",
+
+    priority:
+      priorityInput?.value || "medium",
+
+    category:
+      categoryInput?.value || "personal",
+
+    completed: false,
+
+    createdAt:
+      new Date().toISOString()
+
+  };
+
+
+  /*
+     Activate audio during the user's task-creation click.
+     This helps browsers allow the alarm later.
+  */
+
+  if (reminder) {
+
+    initializeAlarmAudio();
+
+    await resumeAlarmAudio();
+
+
+    /*
+       If notifications haven't been answered yet,
+       ask while the user is actively creating a reminder.
+    */
+
+    if (
+      "Notification" in window &&
+      Notification.permission === "default"
+    ) {
+
+      requestNotificationPermission();
+
+    }
+
+  }
+
+
+  tasks.push(task);
+
+  saveTasks();
+  scheduleTaskReminder(task);
+
+
+  closeModal();
+
+  form.reset();
+
+
+  renderApp();
+
+}
+
+
+function deleteTask(taskId) {
+
+  clearReminderTimer(taskId);
+
+  tasks =
+    tasks.filter(
+      task => task.id !== taskId
+    );
+
+
+  saveTasks();
+
+
+  const prefix =
+    `${taskId}_`;
+
+
+  notifiedReminders =
+    new Set(
+      Array.from(notifiedReminders)
+        .filter(
+          key => !key.startsWith(prefix)
+        )
+    );
+
+
+  saveNotifiedReminders();
+
+
+  renderApp();
+
+}
+
+function toggleTask(taskId) {
+
+  const task =
+    tasks.find(
+      item => item.id === taskId
+    );
+
+
+  if (!task) {
+    return;
+  }
+
+
+  task.completed =
+    !task.completed;
+
+
+  saveTasks();
+
+
+  if (task.completed) {
+
+    clearReminderTimer(task.id);
+
+    const prefix =
+      `${task.id}_`;
+
+    notifiedReminders =
+      new Set(
+        Array.from(notifiedReminders)
+          .filter(
+            key => !key.startsWith(prefix)
+          )
+      );
+
+    saveNotifiedReminders();
+
+  } else {
+
+    scheduleTaskReminder(task);
 
   }
 
@@ -497,270 +1189,243 @@ function navigate(
 }
 
 
-/* =========================
-   SEARCH
-========================= */
+function openModal(id) {
 
-function matchesSearch(task) {
+  const modal =
+    document.getElementById(id);
 
-  if (!searchTerm) {
-    return true;
+  if (!modal) {
+    return;
   }
 
+  modal.classList.add("show");
 
-  const searchableText = [
-
-    task.title,
-    task.description,
-    task.category,
-    task.priority,
-    task.dueDate,
-    task.reminder
-
-  ]
-
-    .filter(Boolean)
-
-    .join(" ")
-
-    .toLowerCase();
-
-
-  return searchableText.includes(
-    searchTerm
+  modal.setAttribute(
+    "aria-hidden",
+    "false"
   );
 
 }
 
 
-/* =========================
-   TASK FILTERING
-========================= */
+function closeModal(id) {
 
-function getFilteredTasks(
-  view = currentView
-) {
+  const modalId =
+    id || "taskModal";
 
-  const today =
-    localDateString();
+  const modal =
+    document.getElementById(modalId);
 
-  let result =
+  if (!modal) {
+    return;
+  }
+
+  modal.classList.remove("show");
+
+  modal.setAttribute(
+    "aria-hidden",
+    "true"
+  );
+
+}
+
+
+function getFilteredTasks() {
+
+  let filtered =
     [...tasks];
 
 
-  switch (view) {
+  if (currentView === "today") {
 
-    case "today":
+    const today =
+      localDateString();
 
-      result =
-        result.filter(
-          task =>
-            task.dueDate === today &&
-            !task.completed
-        );
-
-      break;
-
-
-    case "upcoming":
-
-      result =
-        result.filter(
-          task =>
-            task.dueDate &&
-            task.dueDate > today &&
-            !task.completed
-        );
-
-      break;
-
-
-    case "completed":
-
-      result =
-        result.filter(
-          task =>
-            task.completed
-        );
-
-      break;
-
-
-    case "school":
-    case "work":
-    case "personal":
-    case "errands":
-
-      result =
-        result.filter(
-          task =>
-            String(
-              task.category || ""
-            ).toLowerCase() === view
-        );
-
-      break;
-
-
-    case "all":
-    case "dashboard":
-    case "settings":
-    default:
-
-      break;
+    filtered =
+      filtered.filter(
+        task =>
+          task.dueDate === today
+      );
 
   }
 
 
-  return result.filter(
-    matchesSearch
-  );
+  else if (currentView === "upcoming") {
+
+    const today =
+      localDateString();
+
+    filtered =
+      filtered.filter(
+        task =>
+          task.dueDate &&
+          task.dueDate > today &&
+          !task.completed
+      );
+
+  }
+
+
+  else if (currentView === "completed") {
+
+    filtered =
+      filtered.filter(
+        task => task.completed
+      );
+
+  }
+
+
+  else if (
+    ["school", "work", "personal", "errands"]
+      .includes(currentView)
+  ) {
+
+    filtered =
+      filtered.filter(
+        task =>
+          task.category === currentView
+      );
+
+  }
+
+
+  if (searchTerm) {
+
+    const query =
+      searchTerm.toLowerCase();
+
+
+    filtered =
+      filtered.filter(task => {
+
+        return (
+
+          task.title
+            .toLowerCase()
+            .includes(query)
+
+          ||
+
+          task.description
+            .toLowerCase()
+            .includes(query)
+
+          ||
+
+          task.category
+            .toLowerCase()
+            .includes(query)
+
+        );
+
+      });
+
+  }
+
+
+  return filtered;
 
 }
 
 
-/* =========================
-   TASK CARD
-========================= */
+function taskCard(task) {
 
-function taskMarkup(task) {
+  const reminder =
+    task.reminder
+      ? `
+        <span>•</span>
+        <span>♧ ${escapeHtml(
+          formatReminderTime(task.reminder)
+        )}</span>
+      `
+      : "";
+
+
+  const dueDate =
+    task.dueDate
+      ? `
+        <span>•</span>
+        <span>${escapeHtml(
+          task.dueDate
+        )}</span>
+      `
+      : "";
+
 
   return `
 
     <article
-      class="task-card ${
-        task.completed
-          ? "completed"
-          : ""
-      }"
-      data-id="${escapeHtml(task.id)}"
+      class="task-card ${task.completed ? "completed" : ""}"
+      data-task-id="${task.id}"
     >
 
+      <div class="task-check-area">
 
-      <button
-        class="task-checkbox ${
-          task.completed
-            ? "completed"
-            : ""
-        }"
-        type="button"
-        aria-label="${
-          task.completed
-            ? "Mark incomplete"
-            : "Complete task"
-        }"
-      ></button>
+        <button
+          class="task-check ${task.completed ? "checked" : ""}"
+          data-action="toggle"
+          data-id="${task.id}"
+          type="button"
+          aria-label="Mark task complete"
+        >
+          ${task.completed ? "✓" : ""}
+        </button>
 
-
-      <div class="task-info">
+      </div>
 
 
-        <div class="task-title">
+      <div class="task-main">
 
-          ${escapeHtml(
-            task.title
-          )}
+        <div class="task-top">
 
-        </div>
+          <h3>
+            ${escapeHtml(task.title)}
+          </h3>
 
-
-        <div class="task-meta">
-
-
-          <span>
-            ${escapeHtml(
-              task.category ||
-              "personal"
-            )}
+          <span class="priority-badge ${escapeHtml(task.priority)}">
+            ${escapeHtml(task.priority)}
           </span>
-
-
-          <span>
-            •
-          </span>
-
-
-          <span>
-            ${escapeHtml(
-              formatDate(
-                task.dueDate
-              )
-            )}
-          </span>
-
-
-          ${
-            task.reminder
-
-              ? `
-
-                <span>
-                  •
-                </span>
-
-                <span>
-                  🔔
-                  ${escapeHtml(
-                    task.reminder
-                  )}
-                </span>
-
-              `
-
-              : ""
-          }
-
-
-          <span>
-            •
-          </span>
-
-
-          <span>
-            ${escapeHtml(
-              task.priority ||
-              "medium"
-            )}
-            priority
-          </span>
-
 
         </div>
 
 
         ${
           task.description
-
             ? `
-
               <p class="task-description">
-                ${escapeHtml(
-                  task.description
-                )}
+                ${escapeHtml(task.description)}
               </p>
-
             `
-
             : ""
         }
 
 
-      </div>
+        <div class="task-meta">
 
+          <span class="category-label">
+            ${escapeHtml(task.category)}
+          </span>
 
-      <div class="task-actions">
+          ${dueDate}
 
-        <button
-          class="delete-task"
-          type="button"
-          aria-label="Delete task"
-          title="Delete task"
-        >
-          🗑
-        </button>
+          ${reminder}
+
+        </div>
 
       </div>
 
+
+      <button
+        class="task-delete"
+        data-action="delete"
+        data-id="${task.id}"
+        type="button"
+        aria-label="Delete task"
+        title="Delete task"
+      >
+        ×
+      </button>
 
     </article>
 
@@ -769,215 +1434,47 @@ function taskMarkup(task) {
 }
 
 
-/* =========================
-   TASK LIST
-========================= */
-
-function listMarkup(view) {
-
-  const visible =
-    getFilteredTasks(view);
-
-
-  if (!visible.length) {
-
-    let message =
-      "Your day is waiting to bloom. Add a task to get started.";
-
-
-    if (searchTerm) {
-
-      message =
-        `No tasks match "${escapeHtml(
-          searchTerm
-        )}".`;
-
-    }
-
-
-    else if (
-      view === "completed"
-    ) {
-
-      message =
-        "Completed tasks will appear here.";
-
-    }
-
-
-    else if (
-      view === "upcoming"
-    ) {
-
-      message =
-        "You don't have any upcoming tasks yet.";
-
-    }
-
-
-    else if (
-      view === "today"
-    ) {
-
-      message =
-        "You don't have any tasks due today.";
-
-    }
-
-
-    else if (
-      [
-        "school",
-        "work",
-        "personal",
-        "errands"
-      ].includes(view)
-    ) {
-
-      message =
-        "There are no tasks in this category yet.";
-
-    }
-
-
-    return `
-
-      <div class="empty-state">
-
-        <div class="empty-icon">
-          ✦
-        </div>
-
-
-        <h3>
-
-          ${
-            searchTerm
-              ? "No results found"
-              : "No tasks found"
-          }
-
-        </h3>
-
-
-        <p>
-          ${message}
-        </p>
-
-
-        ${
-          searchTerm
-
-            ? `
-
-              <button
-                class="empty-add-btn"
-                id="clearSearch"
-                type="button"
-              >
-                Clear search
-              </button>
-
-            `
-
-            : `
-
-              <button
-                class="empty-add-btn"
-                type="button"
-              >
-                ＋ Add task
-              </button>
-
-            `
-        }
-
-
-      </div>
-
-    `;
-
-  }
-
-
-  return `
-
-    <div class="task-list">
-
-      ${visible
-        .map(taskMarkup)
-        .join("")}
-
-    </div>
-
-  `;
-
-}
-
-
-/* =========================
-   DASHBOARD
-========================= */
-
-function dashboardMarkup() {
-
-  const today =
-    localDateString();
-
-
-  const userName =
-    getUserName();
-
-
-  const completedCount =
-    tasks.filter(
-      task =>
-        task.completed
-    ).length;
-
-
-  const pendingCount =
-    tasks.filter(
-      task =>
-        !task.completed
-    ).length;
-
-
-  const todayCount =
-    tasks.filter(
-      task =>
-        task.dueDate === today &&
-        !task.completed
-    ).length;
-
-
-  const percentage =
-    tasks.length
-
-      ? Math.round(
-          (
-            completedCount /
-            tasks.length
-          ) * 100
-        )
-
-      : 0;
-
+function greeting() {
 
   const hour =
     new Date().getHours();
 
 
-  const greeting =
-    hour < 12
+  if (hour < 12) {
+    return "Good morning";
+  }
 
-      ? "morning"
+  if (hour < 17) {
+    return "Good afternoon";
+  }
 
-      : hour < 18
+  return "Good evening";
 
-        ? "afternoon"
+}
 
-        : "evening";
+
+function dashboardMarkup() {
+
+  const name =
+    getUserName() || "User";
+
+
+  const total =
+    tasks.length;
+
+
+  const completed =
+    tasks.filter(
+      task => task.completed
+    ).length;
+
+
+  const pending =
+    total - completed;
+
+
+  const today =
+    localDateString();
 
 
   const todayTasks =
@@ -988,280 +1485,186 @@ function dashboardMarkup() {
     );
 
 
+  const recentTasks =
+    [...tasks]
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt) -
+          new Date(a.createdAt)
+      )
+      .slice(0, 5);
+
+
   return `
 
-    <div class="welcome-section">
-
+    <section class="dashboard-header">
 
       <div>
 
-        <p
-          class="date"
-          id="currentDate"
-        ></p>
-
+        <p class="eyebrow">
+          ${greeting()}
+        </p>
 
         <h1>
-
-          Good ${greeting},
-          ${escapeHtml(
-            userName
-          )}
-          👋
-
+          ${escapeHtml(name)}.
         </h1>
 
-
-        <p class="welcome-text">
-
-          Here's what's on your plate today.
-
+        <p class="dashboard-subtitle">
+          Let's make today productive.
         </p>
 
       </div>
 
 
       <button
-        class="add-task-btn"
+        class="primary-btn"
+        data-action="open-task"
         type="button"
       >
-
-        <span>
-          +
-        </span>
-
-        Add Task
-
+        + Add Task
       </button>
 
-
-    </div>
+    </section>
 
 
     <section class="stats-grid">
 
+      <div class="stat-card">
 
-      <div
-        class="stat-card"
-        data-stat-view="all"
-        title="View all tasks"
-      >
-
-        <div class="stat-icon">
-          📋
-        </div>
-
+        <span class="stat-icon">☷</span>
 
         <div>
-
-          <p>
-            Total Tasks
-          </p>
-
-
-          <h2>
-            ${tasks.length}
-          </h2>
-
+          <small>Total Tasks</small>
+          <strong>${total}</strong>
         </div>
 
       </div>
 
 
-      <div
-        class="stat-card"
-        data-stat-view="completed"
-        title="View completed tasks"
-      >
+      <div class="stat-card">
 
-        <div class="stat-icon">
-          ✓
-        </div>
-
+        <span class="stat-icon">◷</span>
 
         <div>
-
-          <p>
-            Completed
-          </p>
-
-
-          <h2>
-            ${completedCount}
-          </h2>
-
+          <small>Pending</small>
+          <strong>${pending}</strong>
         </div>
 
       </div>
 
 
-      <div
-        class="stat-card"
-        data-stat-view="today"
-        title="View today's tasks"
-      >
+      <div class="stat-card">
 
-        <div class="stat-icon">
-          ◷
-        </div>
-
+        <span class="stat-icon">✓</span>
 
         <div>
-
-          <p>
-            Today's Tasks
-          </p>
-
-
-          <h2>
-            ${todayCount}
-          </h2>
-
+          <small>Completed</small>
+          <strong>${completed}</strong>
         </div>
 
       </div>
 
+
+      <div class="stat-card">
+
+        <span class="stat-icon">□</span>
+
+        <div>
+          <small>Due Today</small>
+          <strong>${todayTasks.length}</strong>
+        </div>
+
+      </div>
 
     </section>
 
 
-    <section class="progress-section">
+    <section class="dashboard-grid">
 
+      <div class="content-card">
 
-      <div class="section-heading">
+        <div class="section-heading">
 
+          <div>
+            <p class="eyebrow">YOUR WORK</p>
+            <h2>Recent Tasks</h2>
+          </div>
 
-        <div>
-
-          <h2>
-            Overall Progress
-          </h2>
-
-
-          <p>
-
-            ${completedCount}
-            of
-            ${tasks.length}
-            task${
-              tasks.length === 1
-                ? ""
-                : "s"
-            }
-            completed
-
-          </p>
+          <button
+            class="text-btn"
+            data-action="view-all"
+            type="button"
+          >
+            View all
+          </button>
 
         </div>
 
 
-        <strong>
-          ${percentage}%
-        </strong>
+        <div class="task-list">
 
+          ${
+            recentTasks.length
+              ? recentTasks
+                  .map(taskCard)
+                  .join("")
+              : `
+                <div class="empty-state">
+                  <div class="empty-icon">✦</div>
+                  <h3>No tasks yet</h3>
+                  <p>
+                    Add your first task and let Bloom
+                    help you stay organized.
+                  </p>
+                  <button
+                    class="primary-btn"
+                    data-action="open-task"
+                    type="button"
+                  >
+                    Create First Task
+                  </button>
+                </div>
+              `
+          }
+
+        </div>
 
       </div>
 
 
-      <div class="progress-bar">
+      <div class="content-card today-card">
 
-        <div
-          class="progress-fill"
-          style="width:${percentage}%"
-        ></div>
+        <div class="section-heading">
 
-      </div>
-
-
-    </section>
-
-
-    <section class="tasks-section">
-
-
-      <div class="section-heading">
-
-
-        <div>
-
-          <h2>
-            Today's Tasks
-          </h2>
-
-
-          <p>
-
-            ${todayTasks.length}
-            task${
-              todayTasks.length === 1
-                ? ""
-                : "s"
-            }
-
-          </p>
+          <div>
+            <p class="eyebrow">TODAY</p>
+            <h2>Today's Focus</h2>
+          </div>
 
         </div>
 
 
-        <button
-          class="view-all-btn"
-          id="viewAllTasks"
-          type="button"
-        >
-          View all →
-        </button>
-
-
-      </div>
-
-
-      ${
-        todayTasks.length
-
-          ? `
-
-            <div class="task-list">
-
-              ${todayTasks
-                .map(taskMarkup)
-                .join("")}
-
-            </div>
-
-          `
-
-          : `
-
-            <div class="empty-state">
-
-              <div class="empty-icon">
-                ✦
+        ${
+          todayTasks.length
+            ? `
+              <div class="task-list compact-list">
+                ${todayTasks
+                  .map(taskCard)
+                  .join("")}
               </div>
+            `
+            : `
+              <div class="focus-empty">
+                <div class="focus-icon">✓</div>
+                <h3>You're all clear!</h3>
+                <p>
+                  Nothing is due today.
+                </p>
+              </div>
+            `
+        }
 
-
-              <h3>
-                No tasks for today
-              </h3>
-
-
-              <p>
-                Add a task with today's date
-                and it will appear here.
-              </p>
-
-
-              <button
-                class="empty-add-btn"
-                type="button"
-              >
-                ＋ Add task
-              </button>
-
-            </div>
-
-          `
-      }
-
+      </div>
 
     </section>
 
@@ -1270,186 +1673,123 @@ function dashboardMarkup() {
 }
 
 
-/* =========================
-   SETTINGS
-========================= */
 
-function settingsMarkup() {
+function taskListMarkup() {
 
-  const userName =
-    getUserName();
+  const filtered =
+    getFilteredTasks();
 
 
-  const isDark =
-    document.body.classList.contains(
-      "dark-mode"
-    );
+  let title = "My Tasks";
+
+
+  if (currentView === "today") {
+    title = "Today's Tasks";
+  }
+
+  else if (currentView === "upcoming") {
+    title = "Upcoming Tasks";
+  }
+
+  else if (currentView === "completed") {
+    title = "Completed Tasks";
+  }
+
+  else if (
+    ["school", "work", "personal", "errands"]
+      .includes(currentView)
+  ) {
+
+    const names = {
+      school: "School Work",
+      work: "Work",
+      personal: "Personal",
+      errands: "Errands"
+    };
+
+    title = names[currentView];
+
+  }
 
 
   return `
 
-    <section class="settings-panel">
+    <section class="page-header">
 
+      <div>
 
-      <!-- USERNAME -->
+        <p class="eyebrow">
+          BLOOM
+        </p>
 
-      <div class="settings-card">
+        <h1>
+          ${title}
+        </h1>
 
-
-        <div>
-
-          <h2>
-            Your name
-          </h2>
-
-
-          <p>
-            This name will appear throughout
-            your Bloom dashboard.
-          </p>
-
-        </div>
-
-
-        <div class="name-setting">
-
-
-          <input
-            type="text"
-            id="userNameInput"
-            placeholder="Enter your name"
-            value="${
-              userName === "User"
-                ? ""
-                : escapeHtml(
-                    userName
-                  )
-            }"
-          >
-
-
-          <button
-            class="secondary-btn"
-            id="saveUserName"
-            type="button"
-          >
-            Save
-          </button>
-
-
-        </div>
-
+        <p>
+          Stay organized and keep moving forward.
+        </p>
 
       </div>
 
 
-      <!-- APPEARANCE -->
+      <button
+        class="primary-btn"
+        data-action="open-task"
+        type="button"
+      >
+        + Add Task
+      </button>
 
-      <div class="settings-card">
+    </section>
 
+
+    <section class="content-card full-width-card">
+
+      <div class="section-heading">
 
         <div>
-
           <h2>
-            Appearance
+            ${filtered.length}
+            ${filtered.length === 1 ? "task" : "tasks"}
           </h2>
-
-
-          <p>
-            Switch between light and dark mode.
-          </p>
-
         </div>
-
-
-        <button
-          class="secondary-btn"
-          id="settingsThemeToggle"
-          type="button"
-        >
-
-          ${
-            isDark
-              ? "☀ Light mode"
-              : "☾ Dark mode"
-          }
-
-        </button>
-
 
       </div>
 
 
-      <!-- TASK PREFERENCES -->
+      <div class="task-list">
 
-      <div class="settings-card">
+        ${
+          filtered.length
+            ? filtered
+                .map(taskCard)
+                .join("")
+            : `
+              <div class="empty-state">
+                <div class="empty-icon">✦</div>
 
+                <h3>
+                  No tasks found
+                </h3>
 
-        <div>
+                <p>
+                  There are no tasks in this section yet.
+                </p>
 
-          <h2>
-            Task preferences
-          </h2>
+                <button
+                  class="primary-btn"
+                  data-action="open-task"
+                  type="button"
+                >
+                  Add a Task
+                </button>
 
-
-          <p>
-            New tasks are saved automatically
-            in your browser.
-          </p>
-
-        </div>
-
-
-        <button
-          class="secondary-btn"
-          id="clearCompleted"
-          type="button"
-        >
-          Clear completed
-        </button>
-
-
-      </div>
-
-
-      <!-- STORAGE -->
-
-      <div class="settings-card">
-
-
-        <div>
-
-          <h2>
-            Storage
-          </h2>
-
-
-          <p>
-
-            ${tasks.length}
-            task${
-              tasks.length === 1
-                ? ""
-                : "s"
-            }
-            currently stored locally.
-
-          </p>
-
-        </div>
-
-
-        <button
-          class="secondary-btn danger-btn"
-          id="clearAllTasks"
-          type="button"
-        >
-          Delete all tasks
-        </button>
-
+              </div>
+            `
+        }
 
       </div>
-
 
     </section>
 
@@ -1458,1012 +1798,369 @@ function settingsMarkup() {
 }
 
 
-/* =========================
-   UPDATE USER INTERFACE
-========================= */
+function settingsMarkup() {
 
-function updateUserInterface() {
+  const dark =
+    document.body.classList.contains("dark-mode");
 
-  const userName =
-    getUserName();
 
+  let notificationStatus =
+    "Notifications are not enabled yet.";
 
-  const firstLetter =
-    userName
-      .charAt(0)
-      .toUpperCase() ||
-    "U";
 
+  let notificationButton =
+    "Enable Notifications";
 
-  const sidebarName =
-    document.getElementById(
-      "sidebarUserName"
-    );
 
-
-  const topName =
-    document.getElementById(
-      "topUserName"
-    );
-
-
-  const sidebarAvatar =
-    document.getElementById(
-      "sidebarProfileAvatar"
-    );
-
-
-  const topAvatar =
-    document.getElementById(
-      "topProfileAvatar"
-    );
-
-
-  if (sidebarName) {
-
-    sidebarName.textContent =
-      userName;
-
-  }
-
-
-  if (topName) {
-
-    topName.textContent =
-      userName;
-
-  }
-
-
-  if (sidebarAvatar) {
-
-    sidebarAvatar.textContent =
-      firstLetter;
-
-  }
-
-
-  if (topAvatar) {
-
-    topAvatar.textContent =
-      firstLetter;
-
-  }
-
-}
-
-
-/* =========================
-   RENDER APP
-========================= */
-
-function renderApp() {
-
-  const app =
-    document.getElementById(
-      "appView"
-    );
-
-
-  if (!app) {
-    return;
-  }
-
-
-  const cfg =
-    VIEW_CONFIG[currentView];
-
-
-  const oldSearch =
-    document.querySelector(
-      ".search-box input"
-    );
-
-
-  const previousSearch =
-    oldSearch
-      ? oldSearch.value
-      : searchTerm;
-
-
-  /* DASHBOARD */
-
-  if (
-    currentView ===
-    "dashboard"
-  ) {
-
-    app.innerHTML =
-      dashboardMarkup();
-
-
-    const dateElement =
-      document.getElementById(
-        "currentDate"
-      );
-
-
-    if (dateElement) {
-
-      dateElement.textContent =
-        new Date().toLocaleDateString(
-          undefined,
-          {
-            weekday: "long",
-            month: "long",
-            day: "numeric",
-            year: "numeric"
-          }
-        );
-
-    }
-
-  }
-
-
-  /* SETTINGS */
-
-  else if (
-    currentView ===
-    "settings"
-  ) {
-
-    app.innerHTML = `
-
-      <div class="page-header">
-
-
-        <div>
-
-          <p class="date">
-
-            ${new Date().toLocaleDateString(
-              undefined,
-              {
-                weekday: "long",
-                month: "long",
-                day: "numeric",
-                year: "numeric"
-              }
-            )}
-
-          </p>
-
-
-          <h1>
-            ${cfg.title}
-          </h1>
-
-
-          <p class="welcome-text">
-            ${cfg.description}
-          </p>
-
-        </div>
-
-
-        <button
-          class="add-task-btn"
-          type="button"
-        >
-
-          <span>
-            +
-          </span>
-
-          Add Task
-
-        </button>
-
-
-      </div>
-
-
-      ${settingsMarkup()}
-
-    `;
-
-  }
-
-
-  /* TASK PAGES */
-
-  else {
-
-    const visible =
-      getFilteredTasks(
-        currentView
-      );
-
-
-    app.innerHTML = `
-
-      <div class="page-header">
-
-
-        <div>
-
-          <p class="date">
-
-            ${new Date().toLocaleDateString(
-              undefined,
-              {
-                weekday: "long",
-                month: "long",
-                day: "numeric",
-                year: "numeric"
-              }
-            )}
-
-          </p>
-
-
-          <h1>
-            ${cfg.title}
-          </h1>
-
-
-          <p class="welcome-text">
-            ${cfg.description}
-          </p>
-
-        </div>
-
-
-        <button
-          class="add-task-btn"
-          type="button"
-        >
-
-          <span>
-            +
-          </span>
-
-          Add Task
-
-        </button>
-
-
-      </div>
-
-
-      <section class="tasks-section">
-
-
-        <div class="section-heading">
-
-
-          <div>
-
-            <h2>
-              ${cfg.title}
-            </h2>
-
-
-            <p>
-
-              ${visible.length}
-              task${
-                visible.length === 1
-                  ? ""
-                  : "s"
-              }
-
-            </p>
-
-          </div>
-
-
-        </div>
-
-
-        ${listMarkup(
-          currentView
-        )}
-
-
-      </section>
-
-    `;
-
-  }
-
-
-  /* RESTORE SEARCH */
-
-  const newSearch =
-    document.querySelector(
-      ".search-box input"
-    );
-
-
-  if (newSearch) {
-
-    newSearch.value =
-      previousSearch || "";
-
-  }
-
-
-  updateThemeButton();
-
-  updateUserInterface();
-
-}
-
-
-/* =========================
-   THEME
-========================= */
-
-function updateThemeButton() {
-
-  const isDark =
-    document.body.classList.contains(
-      "dark-mode"
-    );
-
-
-  const icon =
-    document.getElementById(
-      "themeIcon"
-    );
-
-
-  const text =
-    document.getElementById(
-      "themeText"
-    );
-
-
-  if (icon) {
-
-    icon.textContent =
-      isDark
-        ? "☀"
-        : "☾";
-
-  }
-
-
-  if (text) {
-
-    text.textContent =
-      isDark
-        ? "Light"
-        : "Dark";
-
-  }
-
-}
-
-
-function applyTheme(theme) {
-
-  const isDark =
-    theme === "dark";
-
-
-  document.body.classList.toggle(
-    "dark-mode",
-    isDark
-  );
-
-
-  localStorage.setItem(
-    THEME_KEY,
-    isDark
-      ? "dark"
-      : "light"
-  );
-
-
-  updateThemeButton();
-
-}
-
-
-function toggleTheme() {
-
-  const isDark =
-    document.body.classList.contains(
-      "dark-mode"
-    );
-
-
-  applyTheme(
-    isDark
-      ? "light"
-      : "dark"
-  );
-
-
-  if (
-    currentView ===
-    "settings"
-  ) {
-
-    renderApp();
-
-  }
-
-}
-
-
-/* =========================
-   NOTIFICATIONS
-========================= */
-
-async function requestNotificationPermission() {
-
-  if (
-    !("Notification" in window)
-  ) {
-
-    return;
-
-  }
-
-
-  if (
-    Notification.permission ===
-    "default"
-  ) {
-
-    try {
-
-      await Notification.requestPermission();
-
-    } catch (error) {
-
-      console.error(
-        "Notification permission error:",
-        error
-      );
-
-    }
-
-  }
-
-}
-
-
-/* =========================
-   AUDIO
-========================= */
-
-function initializeAlarmAudio() {
-
-  try {
-
-    if (!audioContext) {
-
-      audioContext =
-        new (
-          window.AudioContext ||
-          window.webkitAudioContext
-        )();
-
-    }
-
+  if ("Notification" in window) {
 
     if (
-      audioContext.state ===
-      "suspended"
+      Notification.permission === "granted"
     ) {
 
-      audioContext.resume();
+      notificationStatus =
+        "Browser notifications are enabled.";
+
+      notificationButton =
+        "Notifications Enabled";
 
     }
 
-  } catch (error) {
+    else if (
+      Notification.permission === "denied"
+    ) {
 
-    console.error(
-      "Could not initialize alarm audio:",
-      error
-    );
+      notificationStatus =
+        "Notifications are blocked in your browser settings.";
 
-  }
+      notificationButton =
+        "Notifications Blocked";
 
-}
-
-
-function playAlarmBeep() {
-
-  try {
-
-    initializeAlarmAudio();
-
-
-    if (!audioContext) {
-      return;
     }
 
+  } else {
 
-    const oscillator =
-      audioContext.createOscillator();
+    notificationStatus =
+      "This browser does not support notifications.";
 
-
-    const gain =
-      audioContext.createGain();
-
-
-    oscillator.type =
-      "sine";
-
-
-    oscillator.frequency.setValueAtTime(
-      880,
-      audioContext.currentTime
-    );
-
-
-    oscillator.frequency.exponentialRampToValueAtTime(
-      660,
-      audioContext.currentTime + 0.25
-    );
-
-
-    gain.gain.setValueAtTime(
-      0.0001,
-      audioContext.currentTime
-    );
-
-
-    gain.gain.exponentialRampToValueAtTime(
-      0.3,
-      audioContext.currentTime + 0.03
-    );
-
-
-    gain.gain.exponentialRampToValueAtTime(
-      0.0001,
-      audioContext.currentTime + 0.4
-    );
-
-
-    oscillator.connect(gain);
-
-    gain.connect(
-      audioContext.destination
-    );
-
-
-    oscillator.start();
-
-
-    oscillator.stop(
-      audioContext.currentTime + 0.45
-    );
-
-  } catch (error) {
-
-    console.error(
-      "Alarm sound failed:",
-      error
-    );
-
-  }
-
-}
-
-
-/* =========================
-   START ALARM
-========================= */
-
-function startAlarm(task) {
-
-  stopAlarm();
-
-
-  playAlarmBeep();
-
-
-  alarmInterval =
-    setInterval(
-      playAlarmBeep,
-      900
-    );
-
-
-  showAlarmBox(task);
-
-}
-
-
-/* =========================
-   STOP ALARM
-========================= */
-
-function stopAlarm() {
-
-  if (alarmInterval) {
-
-    clearInterval(
-      alarmInterval
-    );
-
-    alarmInterval = null;
+    notificationButton =
+      "Not Supported";
 
   }
 
 
-  const alarmBox =
-    document.getElementById(
-      "bloomAlarmBox"
-    );
+  return `
+
+    <section class="page-header">
+
+      <div>
+
+        <p class="eyebrow">
+          BLOOM
+        </p>
+
+        <h1>
+          Settings
+        </h1>
+
+        <p>
+          Personalize your Bloom experience.
+        </p>
+
+      </div>
+
+    </section>
 
 
-  if (alarmBox) {
+    <section class="settings-card">
 
-    alarmBox.remove();
+      <div class="setting-row">
 
-  }
+        <div class="setting-info">
 
-}
+          <strong>
+            Appearance
+          </strong>
 
+          <p>
+            Current mode:
+            ${dark ? "Dark Mode" : "Light Mode"}
+          </p>
 
-/* =========================
-   ALARM POPUP
-========================= */
-
-function showAlarmBox(task) {
-
-  const existing =
-    document.getElementById(
-      "bloomAlarmBox"
-    );
+        </div>
 
 
-  if (existing) {
-    existing.remove();
-  }
+        <button
+          class="secondary-btn"
+          data-action="toggle-theme"
+          type="button"
+        >
+          ${
+            dark
+              ? "Switch to Light Mode"
+              : "Switch to Dark Mode"
+          }
+        </button>
+
+      </div>
+
+    </section>
 
 
-  const alarmBox =
-    document.createElement(
-      "div"
-    );
+    <section class="settings-card">
+
+      <div class="setting-row">
+
+        <div class="setting-info">
+
+          <strong>
+            Notifications
+          </strong>
+
+          <p>
+            ${notificationStatus}
+          </p>
+
+        </div>
 
 
-  alarmBox.id =
-    "bloomAlarmBox";
+        <button
+          class="secondary-btn enable-notifications-btn"
+          type="button"
+        >
+          ${notificationButton}
+        </button>
+
+      </div>
+
+    </section>
 
 
-  alarmBox.innerHTML = `
+    <section class="settings-card">
 
-    <div class="bloom-alarm-icon">
-      🔔
-    </div>
+      <div class="setting-row">
 
+        <div class="setting-info">
 
-    <div class="bloom-alarm-content">
+          <strong>
+            Username
+          </strong>
 
-
-      <strong>
-        Bloom Reminder
-      </strong>
-
-
-      <p>
-        ${escapeHtml(
-          task.title
-        )}
-      </p>
-
-
-      ${
-        task.reminder
-
-          ? `
-
-            <small>
-              Reminder set for
+          <p>
+            You're signed in as
+            <strong>
               ${escapeHtml(
-                task.reminder
+                getUserName() || "User"
               )}
-            </small>
+            </strong>
+          </p>
 
-          `
-
-          : ""
-      }
+        </div>
 
 
-    </div>
+        <button
+          class="secondary-btn"
+          data-action="open-username"
+          type="button"
+        >
+          Change Username
+        </button>
 
+      </div>
 
-    <button
-      id="stopBloomAlarm"
-      type="button"
-    >
-      Stop Alarm
-    </button>
+    </section>
 
   `;
 
+}
 
-  document.body.appendChild(
-    alarmBox
-  );
 
+function renderApp() {
+
+  const appView =
+    document.getElementById("appView");
+
+  if (!appView) {
+    return;
+  }
+
+
+  if (currentView === "dashboard") {
+
+    appView.innerHTML =
+      dashboardMarkup();
+
+  }
+
+  else if (currentView === "settings") {
+
+    appView.innerHTML =
+      settingsMarkup();
+
+  }
+
+  else {
+
+    appView.innerHTML =
+      taskListMarkup();
+
+  }
+
+
+  updateActiveNavigation();
+
+}
+
+
+function updateActiveNavigation() {
 
   document
-    .getElementById(
-      "stopBloomAlarm"
+    .querySelectorAll(
+      ".nav-link, .mobile-nav-link"
     )
-    ?.addEventListener(
-      "click",
-      stopAlarm
-    );
+    .forEach(link => {
+
+      link.classList.toggle(
+        "active",
+        link.dataset.view === currentView
+      );
+
+    });
 
 }
 
 
-/* =========================
-   BROWSER NOTIFICATION
-========================= */
+function navigate(view) {
 
-function showTaskNotification(task) {
+  currentView =
+    view || "dashboard";
 
-  if (
-    "Notification" in window &&
-    Notification.permission ===
-      "granted"
-  ) {
 
-    try {
+  searchTerm = "";
 
-      new Notification(
-        "🌸 Bloom Reminder",
-        {
-          body:
-            task.title
-        }
-      );
 
-    } catch (error) {
+  const searchInput =
+    document.getElementById("searchInput");
 
-      console.error(
-        "Notification failed:",
-        error
-      );
-
-    }
-
+  if (searchInput) {
+    searchInput.value = "";
   }
 
+
+  window.location.hash =
+    currentView;
+
+
+  renderApp();
+
 }
 
 
-/* =========================
-   REMINDER TRIGGER
-========================= */
+function changeUsername(newUsername) {
 
-function triggerTaskReminder(task) {
-
-  const reminderId =
-    `${task.id}-${task.dueDate}-${normalizeReminderTime(task.reminder)}`;
+  const cleanName =
+    String(newUsername || "").trim();
 
 
-  if (
-    notifiedReminders.includes(
-      reminderId
-    )
-  ) {
-
+  if (!cleanName) {
     return;
+  }
+
+
+  const oldUser =
+    getUserName();
+
+
+  const oldKey =
+    normalizeUsername(oldUser);
+
+
+  const newKey =
+    normalizeUsername(cleanName);
+
+
+  if (!newKey) {
+    return;
+  }
+
+
+  /*
+     Keep existing tasks when username changes.
+  */
+
+  if (oldKey && oldKey !== newKey) {
+
+    const oldTasks =
+      localStorage.getItem(
+        getTasksStorageKey(oldUser)
+      );
+
+
+    if (oldTasks) {
+
+      localStorage.setItem(
+        getTasksStorageKey(cleanName),
+        oldTasks
+      );
+
+    }
+
+
+    const oldReminders =
+      localStorage.getItem(
+        getRemindersStorageKey(oldUser)
+      );
+
+
+    if (oldReminders) {
+
+      localStorage.setItem(
+        getRemindersStorageKey(cleanName),
+        oldReminders
+      );
+
+    }
 
   }
 
 
-  notifiedReminders.push(
-    reminderId
-  );
+  setCurrentUser(cleanName);
 
+  loadTasks();
 
-  saveNotifiedReminders();
+  loadNotifiedReminders();
+  scheduleAllTaskReminders();
 
+  updateProfileUI();
 
-  startAlarm(task);
-
-
-  showTaskNotification(
-    task
-  );
+  renderApp();
 
 }
 
 
-/* =========================
-   CHECK REMINDERS
-========================= */
-
-function checkTaskReminders() {
-
-  const now =
-    new Date();
-
-
-  const today =
-    localDateString(
-      now
-    );
-
-
-  const hours =
-    String(
-      now.getHours()
-    ).padStart(
-      2,
-      "0"
-    );
-
-
-  const minutes =
-    String(
-      now.getMinutes()
-    ).padStart(
-      2,
-      "0"
-    );
-
-
-  const seconds =
-    String(
-      now.getSeconds()
-    ).padStart(
-      2,
-      "0"
-    );
-
-
-  const currentTime =
-    `${hours}:${minutes}:${seconds}`;
-
-
-  tasks.forEach(
-    task => {
-
-      if (
-        task.completed ||
-        !task.dueDate ||
-        !task.reminder
-      ) {
-
-        return;
-
-      }
-
-      const normalizedReminder =
-        normalizeReminderTime(
-          task.reminder
-        );
-
-      if (
-        task.dueDate === today &&
-        normalizedReminder === currentTime
-      ) {
-
-        triggerTaskReminder(
-          task
-        );
-
-      }
-
-    }
-  );
-
-}
-
-
-/* =========================
-   SIGN-IN
-========================= */
-
-document.addEventListener(
-  "submit",
-  event => {
-
-    if (
-      event.target.id !==
-        "signInForm"
-    ) {
-
-      return;
-
-    }
-
-    event.preventDefault();
-
-    const input =
-      document.getElementById(
-        "signInUsername"
-      );
-
-    const password =
-      document.getElementById(
-        "signInPassword"
-      );
-
-    if (!input || !password) {
-
-      return;
-
-    }
-
-    if (!input.value.trim()) {
-
-      input.focus();
-
-      return;
-
-    }
-
-    if (password.value.length < 6) {
-
-      password.focus();
-
-      return;
-
-    }
-
-    saveUserName(input.value);
-
-    localStorage.setItem(
-      AUTH_KEY,
-      "true"
-    );
-
-    closeSignIn();
-
-    updateUserInterface();
-
-  }
-);
-
-
-/* =========================
-   CLICK EVENTS
-========================= */
+/* =========================================================
+   EVENT LISTENERS
+   ========================================================= */
 
 document.addEventListener(
   "click",
-  event => {
+  async event => {
 
 
-    /* NAVIGATION */
+    /* Navigation */
 
-    const nav =
+    const navLink =
       event.target.closest(
-        ".nav-link[data-view]"
+        ".nav-link, .mobile-nav-link"
       );
 
 
-    if (nav) {
+    if (navLink) {
 
       event.preventDefault();
 
-      searchTerm = "";
-
-
-      const input =
-        document.querySelector(
-          ".search-box input"
-        );
-
-
-      if (input) {
-
-        input.value =
-          "";
-
-      }
-
-
       navigate(
-        nav.dataset.view
+        navLink.dataset.view
       );
 
       return;
@@ -2471,231 +2168,7 @@ document.addEventListener(
     }
 
 
-    /* ADD TASK */
-
-    const addButton =
-      event.target.closest(
-        ".add-task-btn, .empty-add-btn"
-      );
-
-
-    if (addButton) {
-
-
-      if (
-        addButton.id ===
-        "clearSearch"
-      ) {
-
-        searchTerm =
-          "";
-
-
-        const input =
-          document.querySelector(
-            ".search-box input"
-          );
-
-
-        if (input) {
-
-          input.value =
-            "";
-
-          input.focus();
-
-        }
-
-
-        renderApp();
-
-        return;
-
-      }
-
-
-      openModal();
-
-      return;
-
-    }
-
-
-    /* VIEW ALL */
-
-    if (
-      event.target.closest(
-        "#viewAllTasks"
-      )
-    ) {
-
-      searchTerm =
-        "";
-
-      navigate(
-        "all"
-      );
-
-      return;
-
-    }
-
-
-    /* DASHBOARD STATS */
-
-    const statCard =
-      event.target.closest(
-        ".stat-card[data-stat-view]"
-      );
-
-
-    if (statCard) {
-
-      searchTerm =
-        "";
-
-      navigate(
-        statCard.dataset.statView
-      );
-
-      return;
-
-    }
-
-
-    /* CLOSE MODAL */
-
-    if (
-      event.target.closest(
-        ".close-modal, .cancel-btn"
-      ) ||
-      event.target.id ===
-        "taskModal"
-    ) {
-
-      closeModal();
-
-      return;
-
-    }
-
-
-    /* COMPLETE TASK */
-
-    const card =
-      event.target.closest(
-        ".task-card"
-      );
-
-
-    if (
-      card &&
-      event.target.closest(
-        ".task-checkbox"
-      )
-    ) {
-
-      const task =
-        tasks.find(
-          item =>
-            item.id ===
-            card.dataset.id
-        );
-
-
-      if (task) {
-
-        task.completed =
-          !task.completed;
-
-        saveTasks();
-
-        renderApp();
-
-      }
-
-      return;
-
-    }
-
-
-    /* DELETE TASK */
-
-    if (
-      card &&
-      event.target.closest(
-        ".delete-task"
-      )
-    ) {
-
-      tasks =
-        tasks.filter(
-          item =>
-            item.id !==
-            card.dataset.id
-        );
-
-
-      saveTasks();
-
-      renderApp();
-
-      return;
-
-    }
-
-
-    /* NOTIFICATIONS */
-
-    if (
-      event.target.closest(
-        "#notificationButton"
-      )
-    ) {
-
-      const pending =
-        tasks.filter(
-          task =>
-            !task.completed
-        ).length;
-
-
-      alert(
-        pending
-
-          ? `You have ${pending} pending task${
-              pending === 1
-                ? ""
-                : "s"
-            }.`
-
-          : "You're all caught up! 🌸"
-      );
-
-
-      return;
-
-    }
-
-
-    /* PROFILE */
-
-    if (
-      event.target.closest(
-        "#profileButton, #profileButtonTop"
-      )
-    ) {
-
-      navigate(
-        "settings"
-      );
-
-      return;
-
-    }
-
-
-    /* TOP THEME */
+    /* Theme */
 
     if (
       event.target.closest(
@@ -2710,11 +2183,61 @@ document.addEventListener(
     }
 
 
-    /* SETTINGS THEME */
+    /* Notification */
 
     if (
       event.target.closest(
-        "#settingsThemeToggle"
+        "#notificationButton"
+      ) ||
+      event.target.closest(
+        ".enable-notifications-btn"
+      )
+    ) {
+
+      await requestNotificationPermission();
+
+      renderApp();
+
+      return;
+
+    }
+
+
+    /* Open task */
+
+    if (
+      event.target.closest(
+        '[data-action="open-task"]'
+      )
+    ) {
+
+      openModal("taskModal");
+
+      return;
+
+    }
+
+
+    /* View all */
+
+    if (
+      event.target.closest(
+        '[data-action="view-all"]'
+      )
+    ) {
+
+      navigate("all");
+
+      return;
+
+    }
+
+
+    /* Toggle theme from settings */
+
+    if (
+      event.target.closest(
+        '[data-action="toggle-theme"]'
       )
     ) {
 
@@ -2725,97 +2248,231 @@ document.addEventListener(
     }
 
 
-    /* SAVE USERNAME */
+    /* Open username */
 
     if (
       event.target.closest(
-        "#saveUserName"
+        '[data-action="open-username"]'
       )
+    ) {
+
+      openModal("usernameModal");
+
+      return;
+
+    }
+
+
+    /* Toggle task */
+
+    const toggleButton =
+      event.target.closest(
+        '[data-action="toggle"]'
+      );
+
+
+    if (toggleButton) {
+
+      toggleTask(
+        toggleButton.dataset.id
+      );
+
+      return;
+
+    }
+
+
+    /* Delete task */
+
+    const deleteButton =
+      event.target.closest(
+        '[data-action="delete"]'
+      );
+
+
+    if (deleteButton) {
+
+      deleteTask(
+        deleteButton.dataset.id
+      );
+
+      return;
+
+    }
+
+
+    /* Stop alarm */
+
+    if (
+      event.target.closest(
+        "#stopBloomAlarm"
+      )
+    ) {
+
+      hideAlarmBox();
+
+      return;
+
+    }
+
+
+    /* Profile */
+
+    if (
+      event.target.closest(
+        "#profileButton"
+      ) ||
+      event.target.closest(
+        "#profileButtonTop"
+      )
+    ) {
+
+      openModal("usernameModal");
+
+      return;
+
+    }
+
+
+    /* Close username modal */
+
+    if (
+      event.target.closest(
+        "#closeUsernameModal"
+      ) ||
+      event.target.closest(
+        "#cancelUsernameChange"
+      )
+    ) {
+
+      closeModal("usernameModal");
+
+      return;
+
+    }
+
+
+    /* Close task modal */
+
+    if (
+      event.target.closest(
+        "#closeTaskModal"
+      ) ||
+      event.target.closest(
+        "#cancelTask"
+      )
+    ) {
+
+      closeModal("taskModal");
+
+      return;
+
+    }
+
+
+    /*
+       Clicking the overlay itself closes the modal.
+    */
+
+    if (
+      event.target.classList.contains(
+        "modal-overlay"
+      )
+    ) {
+
+      event.target.classList.remove(
+        "show"
+      );
+
+      event.target.setAttribute(
+        "aria-hidden",
+        "true"
+      );
+
+    }
+
+  }
+);
+
+
+
+document.addEventListener(
+  "submit",
+  async event => {
+
+    event.preventDefault();
+
+
+    if (
+      event.target.id ===
+      "signInForm"
     ) {
 
       const input =
         document.getElementById(
-          "userNameInput"
+          "signInUsername"
         );
 
 
-      if (!input) {
+      const username =
+        input?.value.trim();
+
+
+      if (!username) {
         return;
       }
 
 
-      const name =
-        input.value.trim();
+      setCurrentUser(username);
+
+      loadTasks();
+
+      loadNotifiedReminders();
+
+      updateProfileUI();
+
+      closeModal("signInModal");
+
+      renderApp();
+
+      return;
+
+    }
 
 
-      if (!name) {
+    if (
+      event.target.id ===
+      "taskForm"
+    ) {
 
-        input.focus();
+      await createTask(
+        event.target
+      );
 
-        return;
+      return;
 
-      }
+    }
 
 
-      saveUserName(
-        name
+    if (
+      event.target.id ===
+      "usernameForm"
+    ) {
+
+      const input =
+        document.getElementById(
+          "newUsername"
+        );
+
+
+      changeUsername(
+        input?.value
       );
 
 
-      renderApp();
+      input.value = "";
 
-      return;
-
-    }
-
-
-    /* CLEAR COMPLETED */
-
-    if (
-      event.target.closest(
-        "#clearCompleted"
-      )
-    ) {
-
-      tasks =
-        tasks.filter(
-          task =>
-            !task.completed
-        );
-
-
-      saveTasks();
-
-      renderApp();
-
-      return;
-
-    }
-
-
-    /* CLEAR ALL */
-
-    if (
-      event.target.closest(
-        "#clearAllTasks"
-      )
-    ) {
-
-      const confirmed =
-        confirm(
-          "Delete all Bloom tasks? This cannot be undone."
-        );
-
-
-      if (confirmed) {
-
-        tasks = [];
-
-        saveTasks();
-
-        renderApp();
-
-      }
+      closeModal("usernameModal");
 
       return;
 
@@ -2825,310 +2482,52 @@ document.addEventListener(
 );
 
 
-/* =========================
-   SEARCH
-========================= */
 
 document.addEventListener(
   "input",
   event => {
 
     if (
-      !event.target.matches(
-        ".search-box input"
-      )
+      event.target.id ===
+      "searchInput"
     ) {
 
-      return;
-
-    }
-
-
-    searchTerm =
-      event.target.value
-        .trim()
-        .toLowerCase();
-
-
-    /*
-      Searching from Dashboard
-      automatically opens My Tasks.
-    */
-
-    if (
-      currentView ===
-        "dashboard" &&
-      searchTerm
-    ) {
-
-      currentView =
-        "all";
+      searchTerm =
+        event.target.value.trim();
 
       renderApp();
 
-      return;
-
     }
-
-
-    renderTaskViewOnly();
 
   }
 );
 
 
-/* =========================
-   SEARCH VIEW UPDATE
-========================= */
-
-function renderTaskViewOnly() {
-
-  if (
-    currentView ===
-      "dashboard" ||
-    currentView ===
-      "settings"
-  ) {
-
-    renderApp();
-
-    return;
-
-  }
-
-
-  const app =
-    document.getElementById(
-      "appView"
-    );
-
-
-  if (!app) {
-    return;
-  }
-
-
-  const section =
-    app.querySelector(
-      ".tasks-section"
-    );
-
-
-  if (!section) {
-
-    renderApp();
-
-    return;
-
-  }
-
-
-  const visible =
-    getFilteredTasks(
-      currentView
-    );
-
-
-  const countText =
-    section.querySelector(
-      ".section-heading p"
-    );
-
-
-  if (countText) {
-
-    countText.textContent =
-      `${visible.length} task${
-        visible.length === 1
-          ? ""
-          : "s"
-      }`;
-
-  }
-
-
-  const oldContent =
-    section.querySelector(
-      ".task-list, .empty-state"
-    );
-
-
-  const holder =
-    document.createElement(
-      "div"
-    );
-
-
-  holder.innerHTML =
-    listMarkup(
-      currentView
-    );
-
-
-  const newContent =
-    holder.firstElementChild;
-
-
-  if (
-    oldContent &&
-    newContent
-  ) {
-
-    oldContent.replaceWith(
-      newContent
-    );
-
-  }
-
-}
-
-
-/* =========================
-   CREATE TASK
-========================= */
-
-document.addEventListener(
-  "submit",
-  event => {
-
-    if (
-      event.target.id !==
-      "taskForm"
-    ) {
-
-      return;
-
-    }
-
-
-    event.preventDefault();
-
-
-    const titleInput =
-      document.getElementById(
-        "taskTitle"
-      );
-
-
-    const descriptionInput =
-      document.getElementById(
-        "taskDescription"
-      );
-
-
-    const dateInput =
-      document.getElementById(
-        "taskDate"
-      );
-
-
-    const reminderInput =
-      document.getElementById(
-        "taskReminder"
-      );
-
-
-    const priorityInput =
-      document.getElementById(
-        "taskPriority"
-      );
-
-
-    const categoryInput =
-      document.getElementById(
-        "taskCategory"
-      );
-
-
-    const title =
-      titleInput?.value.trim();
-
-
-    if (!title) {
-
-      titleInput?.focus();
-
-      return;
-
-    }
-
-
-    const dueDate =
-      dateInput?.value || "";
-
-
-    const reminder =
-      normalizeReminderTime(
-        reminderInput?.value || ""
-      );
-
-
-    const task = {
-
-      id:
-        `${Date.now()}-${Math.random()
-          .toString(36)
-          .slice(2)}`,
-
-      title,
-
-      description:
-        descriptionInput?.value.trim() ||
-        "",
-
-      dueDate,
-
-      reminder,
-
-      priority:
-        priorityInput?.value ||
-        "medium",
-
-      category:
-        categoryInput?.value ||
-        "personal",
-
-      completed:
-        false,
-
-      createdAt:
-        new Date().toISOString()
-
-    };
-
-
-    tasks.push(task);
-
-
-    saveTasks();
-
-
-    event.target.reset();
-
-
-    closeModal();
-
-
-    renderApp();
-
-  }
-);
-
-
-/* =========================
-   KEYBOARD
-========================= */
 
 document.addEventListener(
   "keydown",
   event => {
 
     if (
-      event.key ===
-      "Escape"
+      event.key === "Escape"
     ) {
 
-      closeModal();
+      document
+        .querySelectorAll(
+          ".modal-overlay.show"
+        )
+        .forEach(modal => {
+
+          modal.classList.remove(
+            "show"
+          );
+
+          modal.setAttribute(
+            "aria-hidden",
+            "true"
+          );
+
+        });
 
     }
 
@@ -3136,99 +2535,154 @@ document.addEventListener(
 );
 
 
-/* =========================
-   BROWSER HISTORY
-========================= */
+
+function initializeBloom() {
+
+  applySavedTheme();
+
+  updateNotificationUI();
+
+
+  /*
+     If there is no authenticated user,
+     show the sign-in screen.
+  */
+
+  if (!isAuthenticated() || !getUserName()) {
+
+    const modal =
+      document.getElementById(
+        "signInModal"
+      );
+
+    if (modal) {
+
+      modal.classList.add("show");
+
+      modal.setAttribute(
+        "aria-hidden",
+        "false"
+      );
+
+    }
+
+    return;
+
+  }
+
+
+  loadTasks();
+
+  loadNotifiedReminders();
+  scheduleAllTaskReminders();
+
+  updateProfileUI();
+
+
+  /*
+     Restore current page from URL.
+  */
+
+  const hash =
+    window.location.hash.replace(
+      "#",
+      ""
+    );
+
+
+  const allowedViews = [
+    "dashboard",
+    "all",
+    "today",
+    "upcoming",
+    "completed",
+    "school",
+    "work",
+    "personal",
+    "errands",
+    "settings"
+  ];
+
+
+  if (
+    allowedViews.includes(hash)
+  ) {
+
+    currentView = hash;
+
+  }
+
+
+  renderApp();
+
+
+  /*
+     Check reminders immediately,
+     then every second.
+  */
+
+  checkTaskReminders();
+
+  setInterval(
+    checkTaskReminders,
+    1000
+  );
+
+}
+
 
 window.addEventListener(
   "hashchange",
   () => {
 
-    searchTerm =
-      "";
-
-    navigate(
-      getViewFromHash(),
-      false
-    );
-
-  }
-);
+    const hash =
+      window.location.hash.replace(
+        "#",
+        ""
+      );
 
 
-window.addEventListener(
-  "popstate",
-  () => {
+    if (hash) {
 
-    searchTerm =
-      "";
+      currentView =
+        hash;
 
-    navigate(
-      getViewFromHash(),
-      false
-    );
+      renderApp();
+
+    }
 
   }
 );
 
 
-/* =========================
-   AUDIO ACTIVATION
-========================= */
+/*
+   Initialize alarm audio after the user interacts
+   with Bloom. This helps browser autoplay policies.
+*/
 
 document.addEventListener(
-  "click",
+  "pointerdown",
   () => {
 
-    initializeAlarmAudio();
+    if (!audioContext) {
+      initializeAlarmAudio();
+    }
+
+    if (
+      audioContext &&
+      audioContext.state === "suspended"
+    ) {
+
+      audioContext.resume()
+        .catch(() => {});
+
+    }
 
   },
-  { once: true }
+  {
+    once: true
+  }
 );
 
 
-/* =========================
-   REMINDER CHECKING
-========================= */
-
-setInterval(
-  checkTaskReminders,
-  10000
-);
-
-
-checkTaskReminders();
-
-
-/* =========================
-   START BLOOM
-========================= */
-
-const savedTheme =
-  localStorage.getItem(
-    THEME_KEY
-  ) || "light";
-
-
-applyTheme(
-  savedTheme
-);
-
-
-navigate(
-  getViewFromHash(),
-  false
-);
-
-
-updateUserInterface();
-
-
-if (
-  !localStorage.getItem(USERNAME_KEY) ||
-  localStorage.getItem(AUTH_KEY) !== "true"
-) {
-
-  openSignIn();
-
-}
+initializeBloom();

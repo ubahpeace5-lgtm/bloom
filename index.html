@@ -3,22 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
   <title>Bloom — Task Manager</title>
-
   <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
-  <!-- =========================
-       SIDEBAR
-  ========================== -->
-
+  <!-- SIDEBAR -->
   <aside class="sidebar">
 
     <div class="brand">
-
       <div class="logo-mark">
         <span>✦</span>
       </div>
@@ -27,12 +21,9 @@
         <h2>BLOOM</h2>
         <small>Task Manager</small>
       </div>
-
     </div>
 
-
     <div class="sidebar-section">
-
       <p class="menu-label">MAIN</p>
 
       <a href="#dashboard" class="nav-link active" data-view="dashboard">
@@ -59,12 +50,9 @@
         <span>✓</span>
         Completed
       </a>
-
     </div>
 
-
     <div class="sidebar-section">
-
       <p class="menu-label">CATEGORIES</p>
 
       <a href="#school" class="nav-link" data-view="school">
@@ -86,9 +74,7 @@
         <span class="category-dot errands"></span>
         Errands
       </a>
-
     </div>
-
 
     <div class="sidebar-bottom">
 
@@ -97,46 +83,28 @@
         Settings
       </a>
 
-
-      <div class="profile-card" id="profileButton">
+      <button class="profile-card" id="profileButton" type="button">
 
         <div class="profile-avatar" id="sidebarProfileAvatar">
           U
         </div>
 
         <div class="profile-info">
-
-          <strong id="sidebarUserName">
-            User
-          </strong>
-
-          <small>
-            Bloom user
-          </small>
-
+          <strong id="sidebarUserName">User</strong>
+          <small>Bloom user</small>
         </div>
 
-        <span class="profile-arrow">
-          ›
-        </span>
+        <span class="profile-arrow">›</span>
 
-      </div>
+      </button>
 
     </div>
 
   </aside>
 
 
-  <!-- =========================
-       MAIN CONTENT
-  ========================== -->
-
+ 
   <main class="main-content">
-
-
-    <!-- =========================
-         TOP BAR
-    ========================== -->
 
     <header class="topbar">
 
@@ -167,43 +135,30 @@
 
       <div class="top-actions">
 
-
-        <!-- DARK / LIGHT MODE -->
-
         <button
           class="theme-toggle top-theme-toggle"
           id="themeToggle"
           type="button"
-          aria-label="Toggle dark mode"
+          aria-label="Toggle color mode"
         >
 
-          <span
-            class="theme-icon"
-            id="themeIcon"
-          >
-            ☾
-          </span>
+          <span class="theme-icon" id="themeIcon">☼</span>
 
-          <span id="themeText">
-            Dark
-          </span>
+          <span id="themeText">Dark Mode</span>
 
         </button>
 
-
-        <!-- NOTIFICATIONS -->
 
         <button
           class="icon-button"
           id="notificationButton"
           type="button"
           aria-label="Notifications"
+          title="Enable notifications"
         >
           ♧
         </button>
 
-
-        <!-- PROFILE -->
 
         <button
           class="top-profile"
@@ -211,20 +166,13 @@
           type="button"
         >
 
-          <div
-            class="profile-avatar"
-            id="topProfileAvatar"
-          >
+          <div class="profile-avatar" id="topProfileAvatar">
             U
           </div>
 
-          <span id="topUserName">
-            User
-          </span>
+          <span id="topUserName">User</span>
 
-          <span>
-            ⌄
-          </span>
+          <span>⌄</span>
 
         </button>
 
@@ -233,21 +181,38 @@
     </header>
 
 
-    <!-- =========================
-         APP VIEW
-    ========================== -->
-
-    <div
-      class="app-view"
-      id="appView"
-    ></div>
+    <div class="app-view" id="appView"></div>
 
   </main>
 
+  <nav class="mobile-nav">
 
-  <!-- =========================
-       SIGN-IN
-  ========================== -->
+    <a href="#dashboard" class="mobile-nav-link active" data-view="dashboard">
+      <span>⌂</span>
+      <small>Home</small>
+    </a>
+
+    <a href="#all" class="mobile-nav-link" data-view="all">
+      <span>☷</span>
+      <small>Tasks</small>
+    </a>
+
+    <a href="#today" class="mobile-nav-link" data-view="today">
+      <span>◷</span>
+      <small>Today</small>
+    </a>
+
+    <a href="#upcoming" class="mobile-nav-link" data-view="upcoming">
+      <span>□</span>
+      <small>Upcoming</small>
+    </a>
+
+    <a href="#settings" class="mobile-nav-link" data-view="settings">
+      <span>⚙</span>
+      <small>Settings</small>
+    </a>
+
+  </nav>
 
   <div
     class="modal-overlay sign-in-overlay"
@@ -262,16 +227,12 @@
 
       <div class="sign-in-mark">✦</div>
 
-      <p class="modal-label">
-        WELCOME TO BLOOM
-      </p>
+      <p class="modal-label">WELCOME TO BLOOM</p>
 
-      <h1 id="signInTitle">
-        Make today bloom.
-      </h1>
+      <h1 id="signInTitle">Make today bloom.</h1>
 
       <p class="sign-in-copy">
-        Sign in with your username to open your task space.
+        Enter your username to create your personal Bloom task space.
       </p>
 
       <form id="signInForm">
@@ -283,22 +244,9 @@
         <input
           type="text"
           id="signInUsername"
-          placeholder="e.g. alex"
+          placeholder="e.g. Peace"
           autocomplete="username"
           maxlength="40"
-          required
-        >
-
-        <label for="signInPassword">
-          Password
-        </label>
-
-        <input
-          type="password"
-          id="signInPassword"
-          placeholder="Enter your password"
-          autocomplete="current-password"
-          minlength="6"
           required
         >
 
@@ -316,35 +264,99 @@
   </div>
 
 
-  <!-- =========================
-       TASK MODAL
-  ========================== -->
-
   <div
     class="modal-overlay"
-    id="taskModal"
+    id="usernameModal"
+    aria-hidden="true"
+    role="dialog"
+    aria-modal="true"
   >
 
-    <div class="task-modal">
-
+    <div class="small-modal">
 
       <div class="modal-header">
 
         <div>
-
-          <p class="modal-label">
-            NEW TASK
-          </p>
-
-          <h2>
-            Create a task
-          </h2>
-
+          <p class="modal-label">PROFILE</p>
+          <h2>Change Username</h2>
         </div>
-
 
         <button
           class="close-modal"
+          id="closeUsernameModal"
+          type="button"
+        >
+          ×
+        </button>
+
+      </div>
+
+
+      <form id="usernameForm">
+
+        <label for="newUsername">
+          New username
+        </label>
+
+        <input
+          type="text"
+          id="newUsername"
+          maxlength="40"
+          placeholder="Enter your new username"
+          required
+        >
+
+        <p class="form-hint">
+          Your Bloom tasks will stay with your username.
+        </p>
+
+        <div class="modal-actions">
+
+          <button
+            class="cancel-btn"
+            id="cancelUsernameChange"
+            type="button"
+          >
+            Cancel
+          </button>
+
+          <button
+            class="primary-btn"
+            type="submit"
+          >
+            Change Username
+          </button>
+
+        </div>
+
+      </form>
+
+    </div>
+
+  </div>
+
+
+  
+  <div
+    class="modal-overlay"
+    id="taskModal"
+    aria-hidden="true"
+    role="dialog"
+    aria-modal="true"
+  >
+
+    <div class="task-modal">
+
+      <div class="modal-header">
+
+        <div>
+          <p class="modal-label">NEW TASK</p>
+          <h2>Create a task</h2>
+        </div>
+
+        <button
+          class="close-modal"
+          id="closeTaskModal"
           type="button"
           aria-label="Close"
         >
@@ -355,9 +367,6 @@
 
 
       <form id="taskForm">
-
-
-        <!-- TASK TITLE -->
 
         <label>
           Task title
@@ -372,8 +381,6 @@
         </label>
 
 
-        <!-- DESCRIPTION -->
-
         <label>
           Description
 
@@ -386,10 +393,7 @@
         </label>
 
 
-        <!-- DATE + REMINDER -->
-
         <div class="form-row">
-
 
           <label>
             Due date
@@ -403,26 +407,27 @@
 
 
           <label>
-            Reminder (optional)
+            Reminder
 
             <input
               type="text"
               id="taskReminder"
-              placeholder="Optional: HH:MM:SS"
               inputmode="numeric"
-              pattern="([01]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?"
+              pattern="(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d|(?:[01]\d|2[0-3])[0-5]\d[0-5]\d"
               maxlength="8"
+              placeholder="HH:MM:SS"
             >
+
+            <small class="field-note">
+              Optional • HH:MM:SS
+            </small>
 
           </label>
 
         </div>
 
 
-        <!-- PRIORITY + CATEGORY -->
-
         <div class="form-row">
-
 
           <label>
             Priority
@@ -433,10 +438,7 @@
                 Low
               </option>
 
-              <option
-                value="medium"
-                selected
-              >
+              <option value="medium" selected>
                 Medium
               </option>
 
@@ -477,12 +479,11 @@
         </div>
 
 
-        <!-- MODAL ACTIONS -->
-
         <div class="modal-actions">
 
           <button
             class="cancel-btn"
+            id="cancelTask"
             type="button"
           >
             Cancel
@@ -500,6 +501,35 @@
       </form>
 
     </div>
+
+  </div>
+
+  <div
+    class="bloom-alarm-box"
+    id="bloomAlarmBox"
+    aria-live="assertive"
+  >
+
+    <div class="bloom-alarm-icon">
+      ♫
+    </div>
+
+    <div class="bloom-alarm-content">
+
+      <strong>Due task reminder</strong>
+
+      <p id="bloomAlarmText">
+        You have a task waiting.
+      </p>
+
+    </div>
+
+    <button
+      id="stopBloomAlarm"
+      type="button"
+    >
+      Stop
+    </button>
 
   </div>
 
