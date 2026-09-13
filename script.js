@@ -2150,17 +2150,18 @@ document.addEventListener(
       return;
     }
 
-    const digits = event.target.value
-      .replace(/\D/g, "")
-      .slice(0, 6);
+    const rawValue = event.target.value
+      .replace(/[^\d:]/g, "")
+      .slice(0, 8);
 
-    event.target.value = digits.replace(
-      /^(\d{2})(\d{1,2})?(\d{1,2})?$/,
-      (_, hours, minutes = "", seconds = "") =>
-        [hours, minutes, seconds]
-          .filter(Boolean)
-          .join(":")
-    );
+    if (/^\d{6}$/.test(rawValue)) {
+      event.target.value = rawValue.replace(
+        /^(\d{2})(\d{2})(\d{2})$/,
+        "$1:$2:$3"
+      );
+    } else {
+      event.target.value = rawValue;
+    }
 
   }
 );
