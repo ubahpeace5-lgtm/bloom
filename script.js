@@ -2016,7 +2016,7 @@ function updateActiveNavigation() {
 
   document
     .querySelectorAll(
-      ".nav-link, .mobile-nav-link"
+      ".nav-link, .mobile-nav-link, .mobile-category-link"
     )
     .forEach(link => {
 
@@ -2174,7 +2174,7 @@ document.addEventListener(
 
     const navLink =
       event.target.closest(
-        ".nav-link, .mobile-nav-link"
+        ".nav-link, .mobile-nav-link, .mobile-category-link"
       );
 
 
