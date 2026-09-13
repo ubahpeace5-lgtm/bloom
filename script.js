@@ -2014,6 +2014,22 @@ function renderApp() {
 
 function updateActiveNavigation() {
 
+  const categoryNav =
+    document.querySelector(".mobile-category-nav");
+
+  const taskViews = [
+    "all",
+    "school",
+    "work",
+    "personal",
+    "errands"
+  ];
+
+  categoryNav?.classList.toggle(
+    "visible",
+    taskViews.includes(currentView)
+  );
+
   document
     .querySelectorAll(
       ".nav-link, .mobile-nav-link, .mobile-category-link"

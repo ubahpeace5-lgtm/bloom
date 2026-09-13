@@ -1439,7 +1439,7 @@ body.dark-mode .bloom-alarm-box {
   }
 
   .mobile-category-nav {
-    display: flex;
+    display: none;
     align-items: center;
     gap: 8px;
     width: 100%;
@@ -1450,6 +1450,10 @@ body.dark-mode .bloom-alarm-box {
 
   .mobile-category-nav::-webkit-scrollbar {
     display: none;
+  }
+
+  .mobile-category-nav.visible {
+    display: flex;
   }
 
   .mobile-category-label {
