@@ -252,6 +252,10 @@ a {
   margin-bottom: 10px;
 }
 
+.settings-section {
+  margin-top: -28px;
+}
+
 
 .profile-card {
   width: 100%;
